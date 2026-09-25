@@ -2,13 +2,21 @@
 name: code-review
 description: Deep code review — behavioral analysis, logic gaps, security, UI impact tracing, spec alignment, then automated checks (lodestar:error-handling-audit, code simplification agents, lodestar:check-rules) with conflict resolution and user confirmation before fixes
 disable-model-invocation: true
-context: fork
+argument-hint: "[uncommitted | full | <layer> | <path> | <base-ref> e.g. origin/develop | <base>..HEAD]"
 allowed-tools: Bash
 ---
 
 # Maintenance Guide
 
 This skill is designed around a clear separation of concerns. Understand it before editing.
+
+## File layout
+
+- `SKILL.md` (this file) — the orchestrator. Runs in the main conversation, because only there can it ask the user (AskUserQuestion is not available to subagents or `context: fork`). It resolves the scope, starts the review subagent, relays the report, asks which issues to fix, and starts the fix subagent. It never reads or analyzes the code itself.
+- `references/review.md` — the review itself (Phases 1–3). Runs in a subagent: isolated from the session's reasoning, and only its report comes back to the main context.
+- `references/fix.md` — applying approved fixes. Runs in a second subagent.
+
+Review checklists go in `references/review.md`, not here.
 
 ## What belongs HERE (deep analysis requiring reasoning)
 
@@ -39,463 +47,148 @@ included in every code review. Adding it here too creates duplication and mainte
 
 Ask: "Can this be checked by reading the code structure alone, without understanding the business context?"
 - **Yes** → rule in `.claude/rules/`
-- **No** → section in this skill
+- **No** → section in `references/review.md`
+
 
 ---
 
-## Context
+# Orchestrator
 
-- Project rules: @.claude/rules/
-- Modified files: !`git diff --name-only HEAD`
-- Task spec (if applicable): !`git log --oneline -20`
+You run in the main conversation. Your jobs: resolve the scope with the user, start the review subagent, relay its report, ask which issues to fix, start the fix subagent. **Do not read, analyze, or fix the code yourself** — that is what keeps the review independent and the main context clean.
 
-## Scope Resolution
+Reference files live in this skill's base directory: `${CLAUDE_SKILL_DIR}/references/` (the same path is shown as "Base directory for this skill" when the skill loads). Pass subagents the absolute paths.
 
-Before doing any review work, determine the scope by presenting options to the user.
+**Arguments:** `$ARGUMENTS`
 
-### Step 1 — Detect changes
+## Step 1 — Resolve arguments
 
-Collect changes at two levels — uncommitted work and the full branch diff:
+If arguments were given, resolve the scope from them and skip the question in Step 4:
+- `uncommitted` → uncommitted scope
+- `full` → full codebase scope
+- a detected layer name (e.g. `php`, `react`) → that layer's scope
+- a git ref or range (`origin/develop`, `develop`, `origin/develop..HEAD`, `origin/develop...HEAD`) → branch scope with that ref as the base. Strip any `..HEAD` / `...HEAD` suffix and keep the ref.
+- an existing file or directory path → path scope
 
-1. Find the main/default branch name (check for `main`, `master`, or `develop`).
-2. **Uncommitted changes:** `git diff --name-only HEAD` — files modified but not yet committed.
-3. **Branch changes:** `git diff --name-only <main-branch>..HEAD` — all files changed on the current branch since it diverged from the main branch. This includes ALL commits on the branch, not just recent ones.
-4. Merge both lists, deduplicate. This is the **branch changeset**.
-5. Note the counts separately: N uncommitted files, M total branch files (including uncommitted).
+If the argument is ambiguous or the ref does not resolve (`git rev-parse --verify --quiet <ref>` fails), say so and fall back to asking.
 
-### Step 2 — Detect project layers
+## Step 2 — Detect changes
 
-Discover which technology layers exist. Use multiple sources — do NOT hardcode layers:
+1. **Find base candidates.** Check the remote first: `git symbolic-ref --short refs/remotes/origin/HEAD`, then whichever of `origin/develop`, `origin/main`, `origin/master` exist (`git rev-parse --verify --quiet <ref>`). With no `origin` remote, use the local `develop` / `main` / `master`. Keep every candidate that exists — there can be more than one.
+2. **Refresh remote refs:** `git fetch origin --quiet`. If it fails (offline, no access), continue with the local copy of the ref and say it may be stale.
+3. **Uncommitted changes:** `git diff --name-only HEAD` plus untracked files from `git ls-files --others --exclude-standard`.
+4. **Branch changes:** `git diff --name-only <base>...HEAD` — three dots, so the diff starts at the merge-base. Two dots would compare against the tip of `<base>` and pull in every commit that landed on `<base>` after the branch was cut, as reversed changes.
+5. Merge uncommitted and branch lists, deduplicate: the **branch changeset**.
+6. Counts: N uncommitted files, X branch files (including uncommitted), `git rev-list --count <base>..HEAD` commits ahead.
 
-1. **Read CLAUDE.md first** — it often describes the project structure, apps, and tech stack. Extract layer names and directory mappings from it. This is the most reliable source.
-2. **Scan for markers** — supplement with filesystem detection: package manager files (`composer.json`, `pyproject.toml`, `package.json`, `Cargo.toml`, `go.mod`, etc.), source directories, file extensions, and framework markers (Laravel's `artisan`, Django's `manage.py`, Next.js config, etc.).
-3. **Reconcile** — merge info from CLAUDE.md and filesystem scan. Use CLAUDE.md labels when available (e.g., if CLAUDE.md says "Laravel control layer" and "Python FastAPI backend", use those labels instead of generic "PHP" and "Python").
+## Step 3 — Detect project layers
 
-Build a list of detected layers with labels (e.g., "PHP/Laravel", "Python/FastAPI", "React/TypeScript").
+Discover which technology layers exist. Do NOT hardcode layers:
 
-### Step 3 — Present options
+1. **Read CLAUDE.md first** — it often describes the project structure, apps, and tech stack. Use its labels and directory mappings.
+2. **Scan for markers** — package manager files (`composer.json`, `pyproject.toml`, `package.json`, `Cargo.toml`, `go.mod`, etc.), source directories, file extensions, framework markers (Laravel's `artisan`, Django's `manage.py`, Next.js config, etc.).
+3. **Reconcile** — prefer CLAUDE.md labels (e.g. "Laravel control layer" over "PHP").
 
-Present the user with a clear choice. Assign a single sequential letter to each option (A, B, C, D...).
+Only detect layers here — do not read source files.
 
-**Adapt the options based on what's available.** Only show uncommitted option if there are uncommitted changes. Only show branch option if the branch has commits ahead of main. Format:
+## Step 4 — Ask for the scope
+
+Skip if the scope came from arguments.
+
+Print a status line first:
 
 ```
-Current branch: <branch-name> (<N> commits ahead of <main-branch>)
-Uncommitted changes: <M> files
-Branch changes (all commits): <X> files
-
-Detected layers: [Layer 1], [Layer 2], [Layer 3]
-
-How would you like to review?
-
-  A) Uncommitted changes only — M files                          <- only if M > 0
-  B) Branch changes — all X files (default)
-  C) Full codebase — all source files, all layers
-  D) [Layer 1] only — all [Layer 1] files in the codebase
-  E) [Layer 2] only — all [Layer 2] files in the codebase
-  F) [Layer 3] only — all [Layer 3] files in the codebase
-
-Reply with a letter, or press Enter for B.
+Branch: <branch> — <N> commits ahead of <base> | Uncommitted: <M> files | Branch changes: <X> files
+Layers: [Layer 1], [Layer 2], [Layer 3]
 ```
 
-Rules for building the options:
-- Use a single sequential letter for every option — A, B, C, D, E, F, G, etc. No compound codes.
-- **Uncommitted option** — only show if there are uncommitted changes. Reviews only the working tree diff.
-- **Branch option** is the default — all files changed on the branch vs. main. Includes both committed and uncommitted changes.
-- **Full codebase option** — all source files across all layers.
-- **Per-layer options** — one per detected layer. These always review all files in that layer across the full codebase (not filtered by changes). Include every detected layer.
-- Adapt labels to what was actually detected — never show hardcoded layer names that don't exist in the project.
-- If branch has zero commits ahead and there are uncommitted changes, make uncommitted the default instead.
-- If branch has zero commits ahead and no uncommitted changes, skip both and make full codebase the default.
+Then ask with the **AskUserQuestion** tool — one question, header `Scope`, up to 4 options, the recommended one first with `(Recommended)` in its label:
 
-Wait for the user's answer before proceeding. If the user says "yes", treat it as the default option.
+| Option label | Description | Show when |
+|---|---|---|
+| `Branch vs <base>` | All X files changed since the branch left `<base>`, committed and uncommitted | branch has commits ahead of `<base>` |
+| `Uncommitted only` | M files in the working tree | M > 0 |
+| `Full codebase` | All source files, all layers | always |
+| `One layer` | All files of one layer: [Layer 1], [Layer 2]… | 2+ layers detected |
 
-### Step 4 — Resolve final file list
+- **Recommended:** `Branch vs <base>`. Zero commits ahead but uncommitted changes → `Uncommitted only`. Neither → `Full codebase`.
+- Use the real base name in the label (`Branch vs origin/develop`), never a placeholder.
+- End the question text with: *"Or type a ref / range (e.g. `origin/main`, `origin/develop..HEAD`) or a path in Other."* Resolve a typed answer with the Step 1 rules.
 
-Based on the user's choice, build the final list of files to review.
+Follow-up questions, a second AskUserQuestion call, only when needed:
+- `Branch vs <base>` picked and Step 2 found more than one base candidate → `Which base?`, one option per candidate (up to 4), the one from the label first.
+- `One layer` picked → `Which layer?`, one option per layer (up to 4; list the rest in the question text for Other).
 
-For uncommitted scope: use only `git diff --name-only HEAD`.
+If AskUserQuestion is not available, print the same options as a numbered list and wait for the reply.
 
-For branch scope: use the merged committed + uncommitted changeset (from Step 1).
+## Step 5 — Resolve the file list
 
-For full codebase scope: scan source directories, exclude `vendor/`, `node_modules/`, `storage/`, `.git/`, `bootstrap/cache/`, `__pycache__/`, `.venv/`, `dist/`, `build/`.
+- **Uncommitted:** `git diff --name-only HEAD` + untracked files.
+- **Branch:** the branch changeset from Step 2 against the chosen base.
+- **Full codebase:** source directories, excluding `vendor/`, `node_modules/`, `storage/`, `.git/`, `bootstrap/cache/`, `__pycache__/`, `.venv/`, `dist/`, `build/`.
+- **Layer:** full-codebase list filtered to the chosen layer.
+- **Path:** source files under the path, same exclusions.
 
-For per-layer scope: scan the full codebase but include only files belonging to the selected layer.
+Announce:
 
-Announce the resolved scope:
+> **Scope:** X files | **Mode:** [uncommitted / branch vs `<base>` / full codebase / layer / path] | **Layers:** [all / specific]
 
-> **Scope:** X files | **Mode:** [session changes / full codebase] | **Layers:** [all / specific layer]
+## Step 6 — Run the review in a subagent
 
-Skip review sections that don't apply to the files in scope (e.g., skip "UI Impact Tracing" when no frontend files and no backend files that produce API/SSE responses are in scope).
+Start **one** `general-purpose` subagent with the Agent tool, in the foreground (`run_in_background: false`) — the next step needs its report.
 
----
-
-## Task
-
-Review all code in the resolved scope. Work through Phase 1, then Phase 2, collecting all findings **without making any fixes**. Then consolidate, resolve conflicts, and present a unified report. Only fix after user confirmation.
-
-For each file in scope, also inspect the classes, services, methods, and modules it interacts with —
-even if those were not changed in this session. Do not limit the analysis to the diff alone.
-
-**Confidence rule:** Only report issues with confidence >= 80 (on a 0-100 scale). When in doubt, verify before reporting. Quality over quantity — false positives waste more time than missed nitpicks.
-
----
-
-# Phase 1 — Deep Analysis
-
-**Independence rule:** This phase runs without context about implementation decisions.
-Do not reference any reasoning or explanations from the current session about why
-the code was written this way. Analyze the code as if seeing it for the first time.
-
-## Stage 1A — Dependency Mapping (pre-pass)
-
-Before spawning analysis agents, run a single dependency mapping agent:
-
-Spawn one agent with Read, Grep, Glob, Bash tools that:
-1. Reads every file in the resolved scope
-2. For each file, identifies all classes, services, methods, and modules it interacts with
-3. Reads those interaction targets as well
-4. Builds a dependency map:
-   {
-     "file": "app/Actions/Payment/ProcessAction.php",
-     "interacts_with": [
-       "app/Services/PaymentService.php",
-       "app/Models/Order.php"
-     ]
-   }
-5. Groups files by shared dependencies — files that interact with the same classes
-   should be in the same group to give the analysis agent full context
-6. Returns: list of groups, where each group contains the primary file(s) and
-   all their interaction targets
-
-Announce completion:
-> **Dependency map complete — N groups identified across X files**
-
-## Stage 1B — Parallel Group Analysis
-
-Spawn one analysis agent per group in parallel. Each agent:
-- Receives: its assigned files + all interaction targets (full file contents, not summaries)
-- Receives: the full list of Phase 1 analysis sections below
-- Works through every section for every file in its group
-- Applies confidence >= 80 threshold
-- Returns structured findings: { file, line, section, issue, confidence, suggestedFix }
-
-Do not spawn more than 5 parallel agents at once. If there are more than 5 groups,
-process in batches of 5.
-
-After all agents complete, collect all findings into a single Phase 1 findings list.
-Deduplicate findings where multiple agents flagged the same issue due to shared
-interaction targets.
-
-Convention and pattern checks (architecture, naming, framework usage, performance patterns) are handled by `/lodestar:check-rules` in Phase 2 Step 3. Do not duplicate that work here.
-
-## Code Quality
-
-- No leftover, dead, or commented-out code
-- No temporary workarounds or quick-fix solutions (TODOs, hardcoded values, flags, short-circuit logic)
-- Logic is clean, readable, and follows a single clear intent per function/method
-- Null/undefined values handled — no unguarded access to nullable fields, optional returns, or missing keys
-
-### Unjustified backward-compatibility shims
-
-BC shims look intentional and escape "no dead code" checks. Two failure modes:
-
-1. **Dead** — migration done, nothing reads the old surface, kept "just in case".
-2. **Speculative** — added on an assumed BC scenario (prod callers, old persisted data, external clients, deployed v1) that doesn't exist in this project. More dangerous: AI assistants add BC reflexively; in pre-production / internal-only / lockstep-deployed codebases it's pure cost.
-
-**Patterns to flag** (anything that exists to preserve an old surface):
-- *Comments:* `# Backward-compatible alias`, `# Legacy`, `# Kept for compat`, `# in case external callers …`, `# old data`, `# DEPRECATED` / `# TODO: remove after rollout` without a tracked task.
-- *Symbols:* alias `OldName = NewName`, monolithic concatenation of split constants, re-exports from a moved module, wrappers that just rename.
-- *Data:* old field on a DTO alongside the new one, DB column "for old rows" without verified old rows, API accepting both old + new request shapes, `old_field or new_field` defaults where the legacy branch is unreachable.
-- *Gating:* `if hasattr(...)`, `if 'old_key' in payload`, `if version < N`.
-
-**For each shim, answer and report all four:**
-1. **Internal caller?** Grep the repo (and sibling apps). None → dead.
-2. **Real external caller?** Name the repo / deployment / client. "Maybe someone someday" → speculative.
-3. **Does the BC assumption hold for THIS project's deployment state?** State it out loud and check: *"handles old persisted data"* needs the migration to have run somewhere with real data; *"covers v1 clients"* needs v1 to have shipped; *"protects during rollout"* needs a separately-deploying consumer (not a lockstep deploy); *"handles old API shapes"* needs a public API or non-lockstep frontend. If the assumption is false here, the shim is unjustified.
-4. **Tracked removal milestone?** Required if the shim stays. No task → it lives forever.
-
-**Verdicts:**
-- `remove now — dead` (Q1+Q2 both no).
-- `remove now — speculative` (Q3 assumption is false). State the false assumption.
-- `remove with task #N` (Q3 holds + real consumer + open migration task).
-- `keep — justified` (named consumer + one-line reason).
-
-Reasoning-heavy: grepping plus judging assumptions against deployment reality. Stays in this skill, not `.claude/rules/`.
-
-## Behavioral Completeness
-
-When code introduces or modifies logic:
-
-1. **Map all callers** — grep/search for every place that invokes or reaches the changed code. List them explicitly in the review output. Verify the new logic produces correct behavior for each caller found.
-2. **Map all states** — check enums, status fields, config values, route definitions, and prop types that feed into the changed code. List the possible states and verify every combination is handled.
-3. **Preserve existing behavior** — diff the old and new logic. For each removed or changed guard, ask: "What did this handle before? Does removing it break any caller or state listed above?"
-
-## Logic Analysis
-
-Examine the business logic in every file in scope for gaps, risks, trade-offs, and edge cases:
-
-1. **Edge cases** — What happens with empty inputs, null values, zero-length collections, boundary numbers, concurrent requests, or unexpected enum values? Trace each code path with adversarial inputs.
-2. **Race conditions & ordering** — Can two requests hit the same resource simultaneously? Is there an assumed execution order that isn't guaranteed? Are database reads and writes atomic where they need to be? Does `firstOrCreate()` / `updateOrCreate()` have a corresponding unique database index to prevent duplicates under concurrency?
-3. **Failure modes** — What happens when an external call fails, a database query returns nothing, a queue job times out, or an SSE stream disconnects mid-flight? Does the system recover or get stuck in a bad state? Are jobs or mail dispatched inside `DB::transaction()` — if so, they fire even on rollback (use `->afterCommit()` or dispatch after the transaction).
-4. **Data integrity** — Can this logic leave the database in an inconsistent state? Are related writes wrapped in a transaction? Can partial success leave orphaned records? Does `first()` assume a unique result — should it be `sole()` to fail fast on duplicates?
-5. **Implicit assumptions** — Does the code assume data exists, assume a specific order of operations, or assume a config value is always present? Are Eloquent query builders reused without `clone` — mutations on a shared builder silently affect all branches. Document every assumption and verify it holds.
-6. **Trade-offs** — If the implementation chose one approach over another (e.g., sync vs. async, eager vs. lazy, cache vs. fresh), note the trade-off and whether it's appropriate for the use case.
-7. **Structural fit** — Does the code's structure match its complexity? Look for signals that a GoF design pattern would simplify the code, and equally flag patterns forced where they add unnecessary complexity.
-
-   **Signals a pattern is missing:**
-   | Signal in code | Suggested pattern |
-   |----------------|-------------------|
-   | Long `if/else` or `switch` on type/status to pick behavior | **Strategy** — encapsulate each variant behind a common interface |
-   | Object changes behavior based on internal state, with transitions | **State** — each state is a class with its own transition logic |
-   | Complex object construction with many parameters or conditional steps | **Builder** — step-by-step construction with a fluent API |
-   | Multiple related objects need coordinated creation | **Factory Method** or **Abstract Factory** |
-   | Need to wrap existing behavior with logging, caching, auth, retry | **Decorator** — stack responsibilities without modifying the original |
-   | Complex subsystem accessed from many places with varying setup | **Facade** — simplified interface hiding internal complexity |
-   | Deeply nested callbacks or sequential processing steps | **Chain of Responsibility** or Pipeline |
-   | Objects that need to react to changes in another object | **Observer** — decouple the notifier from its listeners |
-   | Need to support undo/redo or deferred execution | **Command** — encapsulate actions as objects with execute/undo |
-   | Tree-like structures where leaf and composite need uniform treatment | **Composite** — recursive structure with a shared interface |
-   | Incompatible interface between two existing classes | **Adapter** — translate one interface to another |
-   | Need to traverse a collection without exposing internals | **Iterator** — standardized traversal protocol |
-   | Algorithm skeleton is fixed but steps vary by subclass | **Template Method** — base class defines the flow, subclasses override steps |
-   | Multiple objects communicate in complex ways, creating tight coupling | **Mediator** — centralize interaction logic |
-
-   **Signals a pattern is over-applied (flag these too):**
-   - Pattern applied where a simple function or closure suffices
-   - Abstraction layer with only one implementation and no realistic second one
-   - Indirection that obscures the logic without reducing complexity
-   - Factory that creates only one type — just use `new`
-   - Observer for a single listener — just call it directly
-   - Strategy with a single strategy — just inline the logic
-
-For each issue found: describe the scenario, assess the likelihood and impact, and propose a concrete fix.
-
-## Security
-
-- No SQL injection — no raw queries with user input; use parameterized queries or Eloquent
-- No XSS — user-provided content is escaped before rendering
-- Authorization enforced — routes and controllers use middleware, policies, or gates; no open endpoints
-- No sensitive data exposure — no secrets, tokens, or credentials in code, logs, or error responses. When logging exposes sensitive or oversized data, **do not remove the log statement**. Instead, log the identifiers and metadata needed for debugging (IDs, status codes, key names, counts) without the raw content. The goal is: given this log line, can an engineer find and reproduce the issue?
-- Race conditions — concurrent access to shared state uses locking, transactions, or atomic operations
-- No command injection — user input never passed to `exec()`, `system()`, `Process::run()`, or shell commands
-- Middleware ordering — rate limiting (`throttle`) should run before authentication to prevent DDoS on auth lookups
-
-## UI Impact Tracing
-
-**When to run:** Always run when scope includes frontend files. For backend-only scope, run when any changed controller, action, service, or DTO produces API responses, Inertia props, or SSE events. **Skip only** for purely internal changes (migrations, CLI commands, queue jobs with no user-facing output, pipeline internals with no SSE/API surface).
-
-Even backend-only changes can break the UI — a renamed JSON key, a changed response shape, a new error status code, or a missing field can leave the frontend in a broken state. Trace the impact:
-
-1. **Map the data flow to the UI** — For every changed controller, action, service, or DTO: trace what API responses, Inertia props, or SSE events it produces. Find the frontend components that consume them. List the components explicitly.
-2. **Check response contract** — Has the shape of any JSON response, Inertia prop, or SSE event changed? Compare old vs. new keys, types, and nullability. If a field was added, removed, renamed, or made nullable: verify the consuming frontend component handles it.
-3. **Check error paths in UI** — When the backend can now return a new error (new exception, new status code, new validation rule): does the frontend handle it? Or will the user see a white screen, a stuck spinner, or a generic "Something went wrong"?
-4. **Loading and transition states** — If the change affects timing (new async call, changed queue behavior, added SSE step): does the UI show appropriate loading/progress indicators? Can the user get stuck waiting?
-5. **Visual regression risk** — If props changed shape, conditional rendering may break. If an enum value was added, a switch/map in the frontend may not handle it. Flag any component that could render incorrectly or not at all.
-6. **User flow completeness** — Walk through the user's journey that touches this code. Start from the UI action (button click, form submit, page load), trace through the backend change, and back to what the user sees. Identify any point where the experience breaks, degrades, or becomes confusing.
-
-For each UI issue found: name the frontend component, describe what the user would see, and propose a fix.
-
-## Testing
-
-- New logic has corresponding test coverage (unit or feature)
-- Tests are meaningful — not just asserting that code runs without error
-- No hardcoded test data that should be factories or seeders
-- Test names clearly describe the scenario being tested
-- Edge cases covered — empty inputs, boundary values, error paths, not just happy path
-
-## Spec Alignment
-
-If a task spec, plan, or PRD exists for the current work (check CLAUDE.md for spec locations, or ask the user), read it and verify:
-
-- All requirements from the spec are implemented — nothing missing
-- No scope creep — nothing implemented that the spec didn't ask for
-- Backward compatibility preserved — existing callers, APIs, and data formats still work
-- If migrations were added: migration strategy is sound (reversible, no data loss, handles existing rows)
-
----
-
-# Reporting
-
-Categorize every issue by severity:
-
-- **Critical** — bugs, security vulnerabilities, data loss risks, broken functionality, UI breakage. Must fix.
-- **Important** — missing validation, test gaps, spec deviations, logic edge cases, degraded UX. Should fix before proceeding.
-- **Minor** — optimization opportunities, minor edge cases. Note for later.
-
-For each issue: show the file and line, the problematic code, why it matters, and a concrete fix.
-
-If a file is clean across all sections, confirm it briefly.
-
-### Verdict
-
-End the Phase 1 report with a clear verdict:
-
-> **Ready to proceed?** Yes / No / With fixes
->
-> **Reasoning:** [1-2 sentence technical assessment]
-
-**Do not fix anything yet.** Proceed to Phase 2 to collect all findings first.
-
----
-
-# Phase 2 — Automated Checks (report only)
-
-Run these checks on the files in scope. **Collect findings only — do not apply any fixes.**
-
-## Step 1 — Error Handling Audit
-
-Invoke `/lodestar:error-handling-audit --report-only` scoped to the files in scope. This catches silent exceptions, lost tracebacks, missing UI error states, and unhandled async operations that Phase 1 may have missed. The `--report-only` flag ensures no fixes are applied — only findings are collected.
-
-## Step 2 — Code Simplification (3 parallel review agents)
-
-Launch three review agents in parallel on the files in scope. Each agent receives the full diff and reports findings **without applying fixes**.
-
-### Agent 1: Code Reuse Review
-
-For each change:
-1. Search for existing utilities and helpers that could replace newly written code. Look for similar patterns elsewhere in the codebase.
-2. Flag any new function that duplicates existing functionality. Suggest the existing function to use instead.
-3. Flag any inline logic that could use an existing utility — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards.
-
-### Agent 2: Code Quality Review
-
-Review the same changes for hacky patterns:
-1. **Redundant state**: state that duplicates existing state, cached values that could be derived
-2. **Parameter sprawl**: adding new parameters instead of generalizing or restructuring
-3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified
-4. **Leaky abstractions**: exposing internal details that should be encapsulated
-5. **Stringly-typed code**: using raw strings where constants/enums already exist in the codebase
-6. **Unnecessary comments**: comments explaining WHAT (well-named identifiers already do that) — keep only non-obvious WHY
-
-### Agent 3: Efficiency Review
-
-Review the same changes for efficiency:
-1. **Unnecessary work**: redundant computations, repeated file reads, duplicate API calls, N+1 patterns
-2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
-3. **Hot-path bloat**: new blocking work added to startup or per-request hot paths
-4. **Recurring no-op updates**: state updates that fire unconditionally without change detection
-5. **Memory**: unbounded data structures, missing cleanup, event listener leaks
-6. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
-
-Each agent applies the **confidence >= 80** threshold. Findings are collected as recommendations, not applied.
-
-## Step 3 — Project Rules Check
-
-Invoke `/lodestar:check-rules --report-only` with the same scope. This reads all `.claude/rules/*.md` dynamically, checks every file in scope against them, runs available automated checks (linters, static analysis, tests), and reports violations. The `--report-only` flag ensures no fixes are offered — only findings are collected.
-
-**This step covers ALL convention and pattern checks** — architecture, naming, framework usage, performance patterns, API contracts, etc. See the Maintenance Guide at the top of this skill for why those checks live in rules, not here.
-
-**Steps 1, 2, and 3 can run in parallel** — they are report-only at this stage.
-
----
-
-# Phase 3 — Consolidation & Conflict Resolution
-
-After Phase 1 and Phase 2 are both complete, consolidate all findings into a single unified report.
-
-## Conflict Detection
-
-Before presenting the report, scan for conflicts between findings from different phases:
-
-- **Phase 1 Security vs. Phase 2 Error Handling** — e.g., Phase 1 flags sensitive data in logs, but lodestar:error-handling-audit flags the same code as needing logging. Resolution: log identifiers and metadata needed for debugging, not raw content.
-- **Phase 1 Analysis vs. Phase 2 Simplification** — e.g., Phase 1 suggests adding a guard, but simplification says the code is already handling it. Resolution: note the tradeoff and let the user decide.
-- **Phase 2 Error Handling vs. Phase 2 Rules Check** — e.g., lodestar:error-handling-audit adds a try/catch, but rules check flags it as a convention violation. Resolution: propose a fix that satisfies both.
-
-For each conflict found, present both sides and a recommended resolution.
-
-## Unified Report
-
-Present a single consolidated report with the tables below. All tables use real data from Phase 1 and Phase 2 — never placeholder values.
-
-### Header
+Its prompt contains exactly this, nothing more:
 
 ```
-Code Review Complete
-========================
+Read <absolute path>/references/review.md and follow it exactly.
 
-Scope: X files | Mode: [uncommitted / branch / full codebase] | Layers: [all / specific]
+Scope:
+- Mode: <mode>
+- Base: <base ref, or "n/a">
+- Files (<X>):
+  <one path per line>
+- Layers: <layers>
 ```
 
-### Summary (phase-by-phase counts)
+**Independence rule:** do not add anything from this conversation — no explanations of why the code was written this way, no summaries of the work, no hints about what to look for. The subagent reviews the code as if seeing it for the first time.
 
-| Phase | Critical | Important | Minor | Total |
-|---|---|---|---|---|
-| Deep Analysis | — | — | — | — |
-| Error Handling Audit | — | — | — | — |
-| Code Simplification | — | — | — | — |
-| Project Rules Check | — | — | — | — |
-| **After dedup & conflicts** | **—** | **—** | **—** | **—** |
+## Step 7 — Relay the report
 
-### File Heat Map (one row per file in scope)
+The subagent's report is not shown to the user automatically. Print it **in full, verbatim** — every table, every issue number.
 
-| File | Crit | Imp | Min | Sources |
-|---|---|---|---|---|
-| `app/Actions/Chat/SendAction.php` | 1 | 2 | 0 | P1, Rules |
-| `resources/js/Pages/Chat.tsx` | 0 | 1 | 1 | P1-UI, Simplify |
-| `app/Services/ChatService.php` | 0 | 0 | 0 | ✓ Clean |
+If it found no Critical, Important, or Minor issues, stop here.
 
-List every file in scope — clean files get a "✓ Clean" source tag. Sort by severity descending (most critical files first).
+## Step 8 — Ask which issues to fix
 
-### Issues by Severity
+> **Found X issues (Y Critical, Z Important, W Minor).**
 
-Number issues sequentially across all severity groups (1, 2, 3…). These numbers are referenced in Phase 4 when the user picks which issues to fix.
+Ask with **AskUserQuestion**, header `Fix`:
 
-**Critical (must fix)**
+| Option label | Description |
+|---|---|
+| `Critical + Important (Recommended)` | Fix every Critical and Important issue |
+| `Everything` | Also fix the Minor issues |
+| `Report only` | Fix nothing, stop here |
 
-| # | File:Line | Issue | Confidence | Source | Fix |
-|---|---|---|---|---|---|
-| 1 | `app/Actions/...`:42 | SQL injection via raw input | 95 | P1-Security | Use parameterized query |
+End the question text with: *"Or type issue numbers in Other, e.g. `1, 3, 5`."* No Critical or Important issues → drop the first option and recommend `Report only`. If AskUserQuestion is not available, print the choices and wait.
 
-**Important (should fix)**
+`Report only` → stop.
 
-| # | File:Line | Issue | Confidence | Source | Fix |
-|---|---|---|---|---|---|
-| 2 | `Pages/Chat.tsx`:88 | Missing error state for 409 | 90 | P1-UI | Add conflict response handler |
+## Step 9 — Run the fixes in a subagent
 
-**Minor (note for later)**
+Start **one** `general-purpose` subagent, foreground, with this prompt:
 
-| # | File:Line | Issue | Confidence | Source | Fix |
-|---|---|---|---|---|---|
-| 3 | `Pages/Chat.tsx`:120 | Inline style could use cn() | 85 | Simplify | Extract to utility |
+```
+Read <absolute path>/references/fix.md and follow it exactly.
 
-Source tags: `P1-Quality`, `P1-Behavior`, `P1-Logic`, `P1-Security`, `P1-UI`, `P1-Testing`, `P1-Spec`, `ErrAudit`, `Reuse`, `Quality`, `Efficiency`, `Rules`.
+Approved issues: <numbers>
 
-### Conflicts (only if conflicts exist)
+Scope:
+- Mode: <mode>
+- Base: <base ref, or "n/a">
+- Files: <one path per line>
 
-| # | Location | Phase A says | Phase B says | Resolution |
-|---|---|---|---|---|
-| 1 | `AuthService.php`:55 | P1-Security: sensitive data exposure | ErrAudit: needs error logging | Log user ID + status code, not token |
+Review report:
+<the full report from Step 6, verbatim>
+```
 
-Omit this section entirely if there are no conflicts.
-
----
-
-# Phase 4 — Confirmation & Fix
-
-After presenting the consolidated report:
-
-> **Found X issues (Y Critical, Z Important, W Minor). Want me to fix them?**
->
-> Reply: **yes** (fix all Critical + Important), **all** (fix everything including Minor), or **pick** (list issue numbers, e.g. "1, 3, 5")
-
-Wait for the user's answer. Only then:
-
-1. **Establish baseline** — run available project checks (tests, linters, static analysis) BEFORE making any changes. Record pass/fail state. If some checks already fail, note them as pre-existing failures and exclude from regression detection.
-2. Fix the approved issues.
-3. **Verify after every fix batch** — re-run the same project checks after each logical group of fixes. Do not batch all fixes and check once at the end.
-4. **If new failures appear** (not in the baseline): stop immediately. Do not continue with remaining fixes. Report which fix caused the regression, revert it, and ask the user how to proceed.
-5. **If checks match baseline:** continue to the next batch.
-6. Report what was fixed and final verification results.
-
-### Regression Protection
-
-Fixes must not break existing functionality. Every fix requires **proof it is correct** before it is applied.
-
-**Hard rule: no fix without verification.** For every change, you must be able to answer: "I verified this is correct because I checked [specific evidence]." If you cannot point to concrete evidence (code you read, callers you traced, tests you ran, patterns you confirmed), do not apply the fix. Agent recommendations are hypotheses, not facts — treat them accordingly.
-
-Verification checklist (apply to every fix):
-1. **Read the actual code** — not just the agent's summary of it. Confirm the problem exists as described.
-2. **Trace all callers and creation sites** — a method may appear broken in isolation but be correct in context. Check how the code is actually used, not just how it's defined.
-3. **Check existing codebase patterns** — if the fix contradicts a pattern used successfully elsewhere in the codebase, the fix is likely wrong.
-4. **Preserve logging and observability** — when fixing security issues in logging, replace with safe alternatives — never remove log statements entirely (see Security section in Phase 1).
+Relay its result to the user in full. If it stopped on a regression, show what failed and ask with AskUserQuestion how to proceed (skip that issue and continue with the rest / stop here). To continue, start a new fix subagent with the remaining numbers.
