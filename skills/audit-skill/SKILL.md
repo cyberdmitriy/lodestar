@@ -56,11 +56,12 @@ Read <abs>/references/audit.md and follow it exactly.
 
 Target skill: <abs target dir>
 Checklist: <abs>/references/checklist.md
+Report language: <the language the user writes in>
 Linter output:
 <the JSON from step 3>
 ```
 
-Add nothing from this conversation: no reasons the skill was written this way, no hints. The subagent judges the skill as a first-time reader, as Claude does when it loads it.
+Add nothing else from this conversation: no reasons the skill was written this way, no hints. The subagent judges the skill as a first-time reader, as Claude does when it loads it.
 
 ### 5. Relay the report
 
@@ -68,7 +69,7 @@ Print the subagent's report to the user in full: every row, as written. With no 
 
 ### 6. Ask what to fix
 
-Ask with AskUserQuestion, header `Fix`:
+Ask with AskUserQuestion, header `Fix`. Write the question and option descriptions in the user's language; keep the option labels as below:
 
 | Option | Description |
 |---|---|
@@ -88,6 +89,7 @@ Read <abs>/references/fix.md and follow it exactly.
 Target skill: <abs target dir>
 Linter: python3 <abs>/scripts/lint_skill.py
 Approved findings: <numbers>
+Report language: <the language the user writes in>
 
 Audit report:
 <the full report from step 4>

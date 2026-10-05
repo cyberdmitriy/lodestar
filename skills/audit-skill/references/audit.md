@@ -1,6 +1,6 @@
 # Audit procedure (runs in a subagent)
 
-You audit one Agent Skill against the checklist. You change no files. You receive the skill directory, the linter output, and the checklist path.
+You audit one Agent Skill against the checklist. You change no files. You receive the skill directory, the linter output, the checklist path, and the report language.
 
 ## Steps
 
@@ -31,6 +31,8 @@ List the dropped findings in the report with one line each, so the user can see 
 - The skill's authors may have documented a deliberate deviation (for example "intentionally has no `context: fork` because…"). Respect it and do not report it.
 
 ## Report format
+
+Write the report in the `Report language:` from your prompt (English if it is missing). Translate the headings and prose; keep rule IDs, severities, file paths, line numbers, and quotes from the skill exactly as they are. Replacement text in the Fix column stays in the skill's own language.
 
 ```
 ## Skill audit: <name>

@@ -54,8 +54,8 @@ Spawn one agent with Read, Grep, Glob, Bash tools that:
    }
 5. Groups files by shared dependencies — files that interact with the same classes
    should be in the same group to give the analysis agent full context
-6. Returns: list of groups, where each group contains the primary file(s) and
-   all their interaction targets
+6. Returns: list of groups, where each group contains the paths of the primary file(s)
+   and all their interaction targets (paths only, no file contents)
 
 Announce completion:
 > **Dependency map complete — N groups identified across X files**
@@ -63,7 +63,7 @@ Announce completion:
 ## Stage 1B — Parallel Group Analysis
 
 Spawn one analysis agent per group in parallel. Each agent:
-- Receives: its assigned files + all interaction targets (full file contents, not summaries)
+- Receives: the paths of its assigned files and all interaction targets. It reads them in full itself (never summaries).
 - Receives: the full list of Phase 1 analysis sections below
 - Works through every section for every file in its group
 - Applies confidence >= 80 threshold
@@ -232,20 +232,22 @@ Run these checks on the files in scope. **Collect findings only — do not apply
 
 Invoke `/lodestar:error-handling-audit --report-only` with the arguments for the mode (see **Scoping the sibling skills** below). This catches silent exceptions, lost tracebacks, missing UI error states, and unhandled async operations that Phase 1 may have missed. The `--report-only` flag ensures no fixes are applied — only findings are collected.
 
+You cannot ask the user. If a sibling skill pauses to confirm scope, continue with the scope you passed.
+
 ## Step 2 — Code Simplification (3 parallel review agents)
 
-Launch three review agents in parallel on the files in scope. Each agent receives the full diff and reports findings **without applying fixes**.
+Launch three review agents in parallel. In uncommitted and branch mode, give each agent the diff (see Inputs). In full codebase, layer and path mode, give each agent the file list and have it review those files in full. Agents report findings **without applying fixes**.
 
 ### Agent 1: Code Reuse Review
 
-For each change:
+For each change (or file, in non-diff modes):
 1. Search for existing utilities and helpers that could replace newly written code. Look for similar patterns elsewhere in the codebase.
 2. Flag any new function that duplicates existing functionality. Suggest the existing function to use instead.
 3. Flag any inline logic that could use an existing utility — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards.
 
 ### Agent 2: Code Quality Review (source tag `Simplify-Quality`)
 
-Review the same changes for hacky patterns:
+Review the same changes (or files, in non-diff modes) for hacky patterns:
 1. **Redundant state**: state that duplicates existing state, cached values that could be derived
 2. **Parameter sprawl**: adding new parameters instead of generalizing or restructuring
 3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified
@@ -255,7 +257,7 @@ Review the same changes for hacky patterns:
 
 ### Agent 3: Efficiency Review
 
-Review the same changes for efficiency:
+Review the same changes (or files, in non-diff modes) for efficiency:
 1. **Unnecessary work**: redundant computations, repeated file reads, duplicate API calls, N+1 patterns
 2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
 3. **Hot-path bloat**: new blocking work added to startup or per-request hot paths

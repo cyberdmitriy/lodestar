@@ -101,8 +101,8 @@ Load the relevant `references/<stack>-patterns.md` files for each detected stack
 For each detected `(stack, root_path)`:
 
 1. **Scan** — search all source files (excluding tests) for every pattern violation listed in the universal patterns below AND the loaded language-specific reference.
-2. **Scope check** — if violations span more than 30 files, pause, present summary, ask user to confirm or narrow with `--path`.
-3. **If `--report-only`:** skip steps 3–4. Record all findings with proposed fixes as recommendations. Proceed directly to output.
+2. **Scope check** — skip if `--report-only` (nothing is changed, so a large scope needs no confirmation). Otherwise, if violations span more than 30 files, pause, present summary, ask user to confirm or narrow with `--path`.
+3. **If `--report-only`:** skip steps 4–5. Record all findings with proposed fixes as recommendations. Proceed directly to output.
 4. **Auto-fix** — apply all auto-fix mode patterns without asking. Track each change (file, pattern ID, what changed).
 5. **Ask** — for ask-mode patterns, present each case with: file path, current code, proposed fix, and pattern ID. Apply only with user confirmation.
 

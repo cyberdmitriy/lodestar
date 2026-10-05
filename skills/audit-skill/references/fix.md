@@ -21,6 +21,8 @@ You apply only the approved findings from the audit report. Nothing else.
 
 ## Report
 
+Write the report in the `Report language:` from your prompt (English if it is missing). Translate the headings and prose; keep rule IDs, statuses, file paths, and quoted skill text exactly as they are. This applies only to the report: edits to the skill stay in the skill's own language.
+
 ```
 ## Fixes applied: <name>
 
