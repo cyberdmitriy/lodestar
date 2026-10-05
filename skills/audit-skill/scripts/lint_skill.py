@@ -15,7 +15,7 @@ import re
 import sys
 from pathlib import Path
 
-# --- Limits (sources listed in references/checklist.md, "Sources") ---------
+# --- Limits (sources: references/sources.json) ---------
 # platform docs, "YAML frontmatter requirements": name max 64 chars
 NAME_MAX = 64
 # platform docs: name only lowercase letters, numbers, hyphens
@@ -38,7 +38,6 @@ KNOWN_FIELDS = {
     "disable-model-invocation", "user-invocable", "allowed-tools",
     "disallowed-tools", "model", "effort", "context", "agent", "background",
     "hooks", "paths", "shell", "metadata", "license", "compatibility",
-    "version",
 }
 TRUE_VALUES = {"true", "yes", "on", "1"}
 

@@ -14,7 +14,7 @@ You apply only the approved findings from the audit report. Nothing else.
 ## Loop
 
 1. Apply the approved fixes one finding at a time.
-2. Rerun the linter: `python3 <skill-dir>/scripts/lint_skill.py <target>` (the orchestrator gives you the absolute script path).
+2. Rerun the linter: run the `Linter:` command from your prompt with the target directory as its argument.
 3. If a lint finding is new, or an approved lint finding is still present, fix it and rerun. Stop after three rounds and report what remains.
 4. Reread each edited file once from top to bottom to check for broken links, dangling references and contradictions you introduced.
 

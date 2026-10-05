@@ -9,7 +9,7 @@ disable-model-invocation: true
 
 You run in the main conversation, because the user approves the fixes. The audit and the fixes run in subagents, so the review is independent and the file reads stay out of this context.
 
-Base directory of this skill: `${CLAUDE_SKILL_DIR}`. Give subagents absolute paths.
+Base directory of this skill: `${CLAUDE_SKILL_DIR}` (written `<abs>` below). Give subagents absolute paths.
 
 - Rules: [references/checklist.md](references/checklist.md)
 - Audit procedure (subagent): [references/audit.md](references/audit.md)
@@ -40,12 +40,12 @@ If the target is inside `/plugins/cache/`, warn that fixes there are lost on the
 Run `python3 ${CLAUDE_SKILL_DIR}/scripts/check_docs.py` (no `--diff`; keeps this step cheap).
 
 - `fresh` → continue silently.
-- `stale` → tell the user, in one line, that the official docs changed since `<last_synced>` and the checklist may be outdated. Ask with AskUserQuestion (header `Docs`): `Audit now, update later (Recommended)` / `Run self-update first`. On the second option, follow [references/self-update.md](references/self-update.md), then come back to step 3.
+- `stale` → tell the user, in one line, that the official docs changed since `<last_synced>` and the checklist may be outdated. Ask with AskUserQuestion (header `Docs`): `Audit now, update later (Recommended)` / `Run self-update first`. On the second option, follow [references/self-update.md](references/self-update.md), then come back to step 3. If self-update edited a source repository rather than `${CLAUDE_SKILL_DIR}`, use that repository's skill directory as `<abs>` in steps 3 to 7. The installed copy keeps the old checklist until the plugin is updated.
 - `unreachable` → say so in one line and continue with the local checklist.
 
 ### 3. Lint
 
-Run `python3 ${CLAUDE_SKILL_DIR}/scripts/lint_skill.py <target>` and keep the JSON output.
+Run `python3 <abs>/scripts/lint_skill.py <target>` and keep the JSON output.
 
 ### 4. Audit in a subagent
 
