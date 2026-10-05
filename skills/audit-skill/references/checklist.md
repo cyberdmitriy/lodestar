@@ -33,6 +33,8 @@ Severity:
 
 ## D: Description
 
+With `disable-model-invocation: true`, Claude never sees the description; only the user does. D2, D3, D5 and D6 do not apply then: the description only needs to tell the user what the skill does.
+
 - **D1** critical, lint. Non-empty, at most 1,024 chars, no XML tags.
 - **D2** important, both. Third person ("Processes Excel files…"). Not "I can…" or "You can use this…". The description is injected into the system prompt.
 - **D3** important, both. States what the skill does and when to use it, with concrete trigger terms users actually say: file types, tool names, phrases. Vague ("Helps with documents") fails.
@@ -52,16 +54,16 @@ Severity:
 
 - **P1** important, lint. SKILL.md body is under 500 lines. Detail goes to separate files.
 - **P2** important, lint. References are one level deep: every reference file is linked directly from SKILL.md. Claude may only partially read (`head`) files reached through another reference.
-- **P3** minor, lint. Reference files over 100 lines start with a table of contents.
+- **P3** minor, lint. Reference files over 100 lines start with a table of contents. A TOC lets Claude see the scope when it previews a file partially. Does not apply to a file that is always read in full, for example one a subagent is told to read and follow.
 - **P4** critical, lint. Every referenced file exists.
 - **P5** minor, lint. Every bundled file is referenced from SKILL.md; otherwise Claude never finds it.
-- **P6** important, judge. SKILL.md reads as an overview that points to detail ("For X, see [x.md](x.md)") and says when to load each file. Content is split by domain or variant, so one task does not load irrelevant material.
+- **P6** important, judge. SKILL.md reads as an overview that points to detail ("For X, see [x.md](x.md)") and says when to load each file. Content is split by domain or variant, so one task does not load irrelevant material. Do not move out content that every run needs: it then costs an extra read each time and may be skipped.
 - **P7** minor, judge. Files have descriptive names (`form_validation_rules.md`, not `doc2.md`); directories are organized by domain or feature.
 
 ## C: Content
 
 - **C1** minor, both. No time-sensitive statements ("before August 2025 use…"). Deprecated material goes in an "Old patterns" section.
-- **C2** important, judge. Concise: only context Claude does not already have. Flag paragraphs explaining general knowledge (what a PDF is, how libraries work), motivational filler, and repetition. Ask of each paragraph: does it justify its token cost?
+- **C2** important, judge. Concise: only context Claude does not already have. Flag paragraphs explaining general knowledge (what a PDF is, how libraries work), motivational filler, and repetition. Ask of each paragraph: does it justify its token cost? Content Claude "already knows" still earns its place when it steers attention or sets priorities (a checklist of signals, a list of what to look for). The cost is highest in SKILL.md of a skill that runs in the main conversation; a reference read once by a subagent costs far less.
 - **C3** important, judge. Consistent terminology: one term per concept (not "field" / "box" / "element" for the same thing).
 - **C4** minor, judge. Examples are concrete (real input to output pairs), not abstract. Output-format skills give a template, marked strict ("ALWAYS use this exact structure") or flexible ("sensible default, adapt").
 - **C5** important, judge. No contradictory instructions between SKILL.md and reference files, or within one file.
@@ -89,13 +91,13 @@ Skip this section when the skill has no scripts and calls no tools by name.
 - **X5** minor, lint. Every bundled script is mentioned in SKILL.md.
 - **X6** important, judge. MCP tools are named fully qualified (`ServerName:tool_name` in the API docs; `mcp__server__tool` in Claude Code).
 - **X7** minor, judge. Batch, destructive or high-stakes operations use plan, validate, execute: an intermediate plan file checked by a script before changes apply. Validator errors are specific ("Field 'x' not found. Available: …").
-- **X8** important, judge. Deterministic operations (validation, parsing, format conversion) are bundled scripts, not code Claude regenerates each run.
+- **X8** important, judge. Deterministic operations (validation, parsing, format conversion) are bundled scripts, not code Claude regenerates each run. Flag only where the regenerated code is long, error-prone, or must give the same result every time; a one-line command needs no script.
 - **A1** minor, lint. Forward slashes only in paths.
 
 ## L: Lifecycle and invocation (Claude Code)
 
 - **L1** important, judge. Skills with side effects (deploy, send, commit, post) set `disable-model-invocation: true`. Pure background knowledge that is not an action may set `user-invocable: false`.
-- **L2** minor, judge. `allowed-tools` is as narrow as the task (`Bash(git status *)`, not bare `Bash`) and only pre-approves tools the skill really uses.
+- **L2** minor, judge. `allowed-tools` is as narrow as the task (`Bash(git status *)`, not bare `Bash`) and only pre-approves tools the skill really uses. Before narrowing, list every command the skill runs; a pattern that misses one adds a permission prompt on every run.
 - **L3** minor, judge. Instructions are written as standing guidance. Rendered SKILL.md stays in context for the rest of the session and is not re-read, so steps that assume "only at the start" still read correctly later.
 - **L4** minor, judge. `` !`command` `` injection is used for live data the skill always needs. A command that may exit non-zero has `|| true`, since a failing command aborts the invocation.
 

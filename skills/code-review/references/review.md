@@ -218,11 +218,7 @@ If a file is clean across all sections, confirm it briefly.
 
 ### Verdict
 
-End the Phase 1 report with a clear verdict:
-
-> **Ready to proceed?** Yes / No / With fixes
->
-> **Reasoning:** [1-2 sentence technical assessment]
+Record a verdict for the Unified Report's Verdict section: Yes / No / With fixes, plus a 1-2 sentence technical reasoning.
 
 **Do not fix anything yet.** Proceed to Phase 2 to collect all findings first.
 
@@ -234,7 +230,7 @@ Run these checks on the files in scope. **Collect findings only — do not apply
 
 ## Step 1 — Error Handling Audit
 
-Invoke `/lodestar:error-handling-audit --report-only` scoped to the files in scope. This catches silent exceptions, lost tracebacks, missing UI error states, and unhandled async operations that Phase 1 may have missed. The `--report-only` flag ensures no fixes are applied — only findings are collected.
+Invoke `/lodestar:error-handling-audit --report-only` with the arguments for the mode (see **Scoping the sibling skills** below). This catches silent exceptions, lost tracebacks, missing UI error states, and unhandled async operations that Phase 1 may have missed. The `--report-only` flag ensures no fixes are applied — only findings are collected.
 
 ## Step 2 — Code Simplification (3 parallel review agents)
 
@@ -247,7 +243,7 @@ For each change:
 2. Flag any new function that duplicates existing functionality. Suggest the existing function to use instead.
 3. Flag any inline logic that could use an existing utility — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards.
 
-### Agent 2: Code Quality Review
+### Agent 2: Code Quality Review (source tag `Simplify-Quality`)
 
 Review the same changes for hacky patterns:
 1. **Redundant state**: state that duplicates existing state, cached values that could be derived
@@ -271,9 +267,21 @@ Each agent applies the **confidence >= 80** threshold. Findings are collected as
 
 ## Step 3 — Project Rules Check
 
-Invoke `/lodestar:check-rules --report-only` with the same scope. This reads all `.claude/rules/*.md` dynamically, checks every file in scope against them, runs available automated checks (linters, static analysis, tests), and reports violations. The `--report-only` flag ensures no fixes are offered — only findings are collected.
+Invoke `/lodestar:check-rules --report-only` with the arguments for the mode (see **Scoping the sibling skills** below). This reads all `.claude/rules/*.md` dynamically, checks every file in scope against them, runs available automated checks (linters, static analysis, tests), and reports violations. The `--report-only` flag ensures no fixes are offered — only findings are collected.
 
-**This step covers ALL convention and pattern checks** — architecture, naming, framework usage, performance patterns, API contracts, etc. See the Maintenance Guide in the skill's `SKILL.md` for why those checks live in rules, not here.
+**This step covers ALL convention and pattern checks** — architecture, naming, framework usage, performance patterns, API contracts, etc.
+
+## Scoping the sibling skills
+
+Neither sibling takes a file list or a base ref. `/lodestar:check-rules` accepts one file path, one rule name, or `--all`; with no path it checks only `git diff --name-only HEAD` (uncommitted work), which misses committed branch changes. `/lodestar:error-handling-audit` accepts one `--path` and `--stack`. Call them per mode:
+
+| Mode | `/lodestar:error-handling-audit` | `/lodestar:check-rules` |
+|---|---|---|
+| uncommitted, branch, path | `--report-only --path <dir>`, once per distinct directory that holds files in scope | `--report-only <file>`, once per file in scope |
+| full codebase | `--report-only` (no `--path`) | `--report-only --all` |
+| layer | `--report-only --stack <layer>` when the layer is `python`, `laravel` or `react`; otherwise `--report-only --path <layer dir>` | `--report-only --all` |
+
+Never call `/lodestar:check-rules` without a path or `--all` in branch mode. After each call, keep only findings in files from the scope's file list.
 
 **Steps 1, 2, and 3 can run in parallel** — they are report-only at this stage.
 
@@ -303,7 +311,7 @@ Present a single consolidated report with the tables below. All tables use real 
 Code Review Complete
 ========================
 
-Scope: X files | Mode: [uncommitted / branch vs <base> / full codebase / path] | Layers: [all / specific]
+Scope: X files | Mode: [uncommitted / branch vs <base> / full codebase / layer / path] | Layers: [all / specific]
 ```
 
 ### Summary (phase-by-phase counts)
@@ -320,8 +328,8 @@ Scope: X files | Mode: [uncommitted / branch vs <base> / full codebase / path] |
 
 | File | Crit | Imp | Min | Sources |
 |---|---|---|---|---|
-| `app/Actions/Chat/SendAction.php` | 1 | 2 | 0 | P1, Rules |
-| `resources/js/Pages/Chat.tsx` | 0 | 1 | 1 | P1-UI, Simplify |
+| `app/Actions/Chat/SendAction.php` | 1 | 2 | 0 | P1-Logic, Rules |
+| `resources/js/Pages/Chat.tsx` | 0 | 1 | 1 | P1-UI, Reuse |
 | `app/Services/ChatService.php` | 0 | 0 | 0 | ✓ Clean |
 
 List every file in scope — clean files get a "✓ Clean" source tag. Sort by severity descending (most critical files first).
@@ -346,9 +354,15 @@ Number issues sequentially across all severity groups (1, 2, 3…). The orchestr
 
 | # | File:Line | Issue | Confidence | Source | Fix |
 |---|---|---|---|---|---|
-| 3 | `Pages/Chat.tsx`:120 | Inline style could use cn() | 85 | Simplify | Extract to utility |
+| 3 | `Pages/Chat.tsx`:120 | Inline style could use cn() | 85 | Reuse | Extract to utility |
 
-Source tags: `P1-Quality`, `P1-Behavior`, `P1-Logic`, `P1-Security`, `P1-UI`, `P1-Testing`, `P1-Spec`, `ErrAudit`, `Reuse`, `Quality`, `Efficiency`, `Rules`.
+Source tags: `P1-Quality`, `P1-Behavior`, `P1-Logic`, `P1-Security`, `P1-UI`, `P1-Testing`, `P1-Spec`, `ErrAudit`, `Reuse`, `Simplify-Quality`, `Efficiency`, `Rules`.
+
+### Verdict
+
+> **Ready to proceed?** Yes / No / With fixes
+>
+> **Reasoning:** [1-2 sentence technical assessment]
 
 ### Conflicts (only if conflicts exist)
 

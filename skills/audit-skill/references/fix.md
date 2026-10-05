@@ -9,6 +9,7 @@ You apply only the approved findings from the audit report. Nothing else.
 - When a fix shortens text (C2, D6), cut sentences; do not rewrite the meaning of the ones you keep.
 - Description rewrites (D2, D3, D5): third person, what it does first, then "Use when…" with the trigger terms from the old description. Never drop an existing trigger term unless the finding says it is wrong.
 - Keep the skill's own style: heading levels, list style, language, terminology.
+- If, while applying a fix, you see that it would remove guidance that steers Claude, add a read or a permission prompt to every run, or break something the finding did not mention, do not apply it. Report it as `skipped` with the reason.
 - Do not bump versions, commit, or push.
 
 ## Loop

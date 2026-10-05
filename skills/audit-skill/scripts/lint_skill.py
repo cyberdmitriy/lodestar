@@ -175,10 +175,11 @@ def lint(skill_dir):
             out.append(finding("D1", "critical", "SKILL.md", 1, f"`description` is {len(desc)} chars, max {DESCRIPTION_MAX}."))
         if XML_TAG.search(desc):
             out.append(finding("D1", "critical", "SKILL.md", 1, "`description` contains an XML tag."))
+        manual_only = fields.get("disable-model-invocation", "").lower() in TRUE_VALUES
         person = FIRST_SECOND_PERSON.search(desc)
-        if person:
+        if person and not manual_only:
             out.append(finding("D2", "important", "SKILL.md", 1, f"`description` is not third person: '{person.group(0)}'."))
-        if not TRIGGER_HINT.search(desc + " " + when):
+        if not manual_only and not TRIGGER_HINT.search(desc + " " + when):
             out.append(finding("D3", "important", "SKILL.md", 1, "`description` says what the skill does but no explicit 'when to use' trigger was found."))
     if len(desc) + len(when) > LISTING_MAX:
         out.append(finding("D4", "important", "SKILL.md", 1, f"`description` + `when_to_use` = {len(desc) + len(when)} chars; Claude Code truncates at {LISTING_MAX}."))

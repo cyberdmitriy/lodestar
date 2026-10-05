@@ -1,54 +1,18 @@
 ---
 name: code-review
-description: Deep code review — behavioral analysis, logic gaps, security, UI impact tracing, spec alignment, then automated checks (lodestar:error-handling-audit, code simplification agents, lodestar:check-rules) with conflict resolution and user confirmation before fixes
+description: Deep code review of a branch, uncommitted changes, a layer, or a path: logic gaps, security, UI impact, spec alignment, plus error-handling, simplification and project-rule checks, with fixes only on approval.
 disable-model-invocation: true
 argument-hint: "[uncommitted | full | <layer> | <path> | <base-ref> e.g. origin/develop | <base>..HEAD]"
-allowed-tools: Bash
+allowed-tools: Bash(git *)
 ---
 
-# Maintenance Guide
-
-This skill is designed around a clear separation of concerns. Understand it before editing.
-
-## File layout
+# File layout
 
 - `SKILL.md` (this file) — the orchestrator. Runs in the main conversation, because only there can it ask the user (AskUserQuestion is not available to subagents or `context: fork`). It resolves the scope, starts the review subagent, relays the report, asks which issues to fix, and starts the fix subagent. It never reads or analyzes the code itself.
 - `references/review.md` — the review itself (Phases 1–3). Runs in a subagent: isolated from the session's reasoning, and only its report comes back to the main context.
 - `references/fix.md` — applying approved fixes. Runs in a second subagent.
 
-Review checklists go in `references/review.md`, not here.
-
-## What belongs HERE (deep analysis requiring reasoning)
-
-- Behavioral completeness — mapping callers, states, verifying preservation
-- Logic analysis — edge cases, race conditions, failure modes, data integrity
-- Security analysis — injection, auth bypass, sensitive data exposure
-- UI impact tracing — data flow from backend to frontend, contract breakage
-- Spec alignment — requirement coverage, scope creep
-- Testing assessment — coverage gaps, meaningful assertions
-
-## What belongs in `.claude/rules/` (convention/pattern checking)
-
-- Architecture patterns (thin controllers, Actions vs Services, repositories)
-- Naming conventions (files, classes, enums, routes)
-- Code style (formatting, imports, guard clauses)
-- Framework conventions (Form Requests, DTOs, eager loading, migrations)
-- Performance patterns (pagination, bulk ops, indexes, caching)
-- API contracts (casing, resource classes)
-
-**If you're about to add a checklist item that can be verified by pattern matching — STOP.
-Add it to an existing rule in `.claude/rules/` or create a new rule file.
-`/lodestar:check-rules` (Phase 2 Step 3) will pick it up automatically.**
-
-The skill invokes `/lodestar:check-rules` in Phase 2. Any convention added to rules is automatically
-included in every code review. Adding it here too creates duplication and maintenance burden.
-
-### Decision test
-
-Ask: "Can this be checked by reading the code structure alone, without understanding the business context?"
-- **Yes** → rule in `.claude/rules/`
-- **No** → section in `references/review.md`
-
+Editing this skill? Read [MAINTAINING.md](MAINTAINING.md) first. Do not load it during a review run.
 
 ---
 
@@ -68,6 +32,8 @@ If arguments were given, resolve the scope from them and skip the question in St
 - a detected layer name (e.g. `php`, `react`) → that layer's scope
 - a git ref or range (`origin/develop`, `develop`, `origin/develop..HEAD`, `origin/develop...HEAD`) → branch scope with that ref as the base. Strip any `..HEAD` / `...HEAD` suffix and keep the ref.
 - an existing file or directory path → path scope
+
+Layer names are validated after Step 3; a ref argument becomes the only base candidate in Step 2.
 
 If the argument is ambiguous or the ref does not resolve (`git rev-parse --verify --quiet <ref>` fails), say so and fall back to asking.
 
