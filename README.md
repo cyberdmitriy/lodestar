@@ -14,6 +14,7 @@ All skills are invoked as `/lodestar:<skill>`.
 | review-mr | `/lodestar:review-mr` | Independent MR/PR (or branch) review: behavior-diff, spec parity, test-quality; posts inline comments after confirmation |
 | init-rules | `/lodestar:init-rules` | Generate project coding-standard rules at `.claude/rules/` |
 | audit-rules | `/lodestar:audit-rules` | Audit existing `.claude/rules/` for clarity and integrity |
+| audit-skill | `/lodestar:audit-skill` | Audit a skill against Anthropic's skill-authoring best practices and fix approved findings; `self-update` re-syncs with the live docs |
 | check-rules | `/lodestar:check-rules` | Check code against `.claude/rules/` and report violations |
 | audit-solution | `/lodestar:audit-solution` | Vet plans/solutions for workarounds and fragile approaches |
 | error-handling-audit | `/lodestar:error-handling-audit` | Find silent failures and logging gaps (Python, Laravel, React) |

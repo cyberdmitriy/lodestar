@@ -1,0 +1,18 @@
+{
+  "sources": [
+    {
+      "id": "best-practices",
+      "title": "Skill authoring best practices (Claude Platform docs)",
+      "url": "https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices.md",
+      "sha256": "542eee1e150ff7e2853099dd9e24b94626817d5a50ba50af4a4c35101a355f13",
+      "last_synced": "2026-10-05"
+    },
+    {
+      "id": "claude-code-skills",
+      "title": "Extend Claude with skills (Claude Code docs)",
+      "url": "https://code.claude.com/docs/en/skills.md",
+      "sha256": "acdf96599200090206dd21327022aa58b21e23dfebdaffaa974b2fdb25077e00",
+      "last_synced": "2026-10-05"
+    }
+  ]
+}

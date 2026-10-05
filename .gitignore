@@ -18,3 +18,6 @@ CLAUDE.md
 .idea/
 *.swp
 *.swo
+
+# Local copies of upstream docs used by audit-skill diffs (not redistributed)
+skills/audit-skill/snapshots/
