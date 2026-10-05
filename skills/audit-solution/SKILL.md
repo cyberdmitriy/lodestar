@@ -1,7 +1,7 @@
 ---
 name: audit-solution
 description: Audit plans, solutions, and code for robustness and quality. Catches workarounds, quickfixes, fragile approaches, and suboptimal decisions that should use better patterns. Use when reviewing a plan before implementation, reviewing code after implementation, or when uncertain whether a chosen approach is the right one. Triggers on '/lodestar:audit-solution' or when the user asks to check if a solution is robust, reliable, or correct.
-context: fork
+argument-hint: "[file-or-path]"
 ---
 
 # Audit Solution
@@ -14,53 +14,20 @@ This skill does NOT check convention compliance (that is `/lodestar:check-rules`
 
 **The audit MUST be performed by a subagent that did not do the work.** You almost
 certainly wrote the thing you are about to audit; you will rate your own trade-offs
-as reasonable, because they seemed reasonable when you made them. A forked context
-does not fix this — a fork still carries the conversation in which the decisions were
-made, and it inherits the reasoning that justified them.
+as reasonable, because they seemed reasonable when you made them. This skill runs in
+the main conversation only to gather scope and constraints; the audit itself goes to
+a fresh subagent that never saw the reasoning.
 
-So: gather scope yourself, then **dispatch a fresh subagent via the Agent tool** with
-a self-contained briefing, and report what it finds.
+The goal is auditor independence: the auditor must not inherit the conversation and
+must not defend decisions already made. Everything below serves that goal. You are
+the orchestrator: you gather scope and constraints (and may ask the user), dispatch
+the auditor via the Agent tool, and relay its report. You do not audit.
 
-The briefing must stand alone, because the auditor has none of the conversation:
+Reference files live in this skill's base directory: `${CLAUDE_SKILL_DIR}/references/`
+(the same path is shown as "Base directory for this skill" when the skill loads). Pass
+the auditor absolute paths.
 
-1. **What to audit** — absolute paths, and `git diff` output or the plan text inline.
-2. **The problem being solved**, and the constraints that shaped it — anything the
-   user stated as a requirement, a rejected alternative and why it was rejected, and
-   any invariant that must hold. Without this the auditor invents its own idea of the
-   goal and reports on that instead.
-3. **The audit lens** — the six questions in Phase 2 and the anti-pattern table below.
-4. **"You did not write this and have no stake in defending it. Be adversarial."**
-5. **"Verify by running, not by reading"** — with whatever safe way exists to exercise
-   the code (a scratch copy, a test fixture, an env var that disables a guard). A
-   finding that was reproduced outranks a finding that was reasoned.
-6. **Safety limits** — what must not be touched: no writes to real user data, no
-   commits, no pushes, no network calls with side effects. Name the scratch directory
-   it may use.
-7. **The report format** from Phase 3, and the CRITICAL/MINOR split.
-
-Ask for an explicit statement of which findings were verified by execution and which
-are reasoning only. Treat the second kind as a hypothesis, not a defect.
-
-### On a second round
-
-When the user asks to audit again after fixes, prefer **a fresh auditor over resuming
-the previous one**. A reviewer that has already passed over the code twice stops
-looking at what it has cleared, and its verdict converges toward "fine". Re-running
-the previous auditor is right for exactly one purpose: verifying its own findings are
-closed, using its own reproduction recipes. If both matter, do both, and tell the new
-one nothing about the old one's list so it does not just re-derive it.
-
-Fixes are a normal place for new defects. Every round after the first must audit the
-fixes as fresh surface, not only re-check the original findings.
-
-### Relaying the result
-
-Report what the auditor found, ranked by severity, and say plainly which findings were
-reproduced. Do not soften a finding because you disagree with it — if you think it is
-wrong, say the auditor claims X, you believe Y, and let the user decide. Where a
-finding is about something you wrote, say so rather than describing it impersonally.
-
-## Scope Detection
+## 1. Scope Detection
 
 Determine what to audit based on context:
 
@@ -70,9 +37,7 @@ Determine what to audit based on context:
 4. **Both** — If both a plan and code changes exist, audit both and cross-reference (does the code actually implement the plan's approach?).
 5. **No context** — If none of the above, ask the user what to audit.
 
-## Audit Process
-
-### Phase 1: Gather Context
+## 2. Gather Context
 
 You do this part; it becomes the briefing for the auditor.
 
@@ -82,127 +47,65 @@ You do this part; it becomes the briefing for the auditor.
 4. If the project has coding rules or conventions (e.g., CLAUDE.md, `.claude/rules/`, ADRs, style guides), read the ones relevant to the domain being audited.
 5. Identify which language(s), framework(s), and layer(s) are involved.
 6. Write down the constraints and rejected alternatives — the auditor cannot see the conversation where they were decided, and without them it will audit against a goal it invented.
+7. Pick the report language. An explicit request wins: a language named in the arguments or in the invoking message ("report in Russian", "сделай отчет на русском"). Otherwise use the language the user wrote in before invoking the skill. Ignore the language of code, files and tool output. With no user messages to go by, use English.
 
-### Phase 2: Apply the Audit Lens
+## 3. Dispatch the auditor
 
-This is the auditor's job — put these questions in its briefing verbatim.
+Dispatch a fresh subagent via the Agent tool with a self-contained briefing. The
+briefing must stand alone, because the auditor has none of the conversation:
 
-For each decision or approach in the plan/code, ask these questions **in order**. Stop at the first "yes" — that is the finding.
+1. **What to audit** — absolute paths, and `git diff` output or the plan text inline.
+2. **The problem being solved**, and the constraints that shaped it — anything the
+   user stated as a requirement, each rejected alternative, and any invariant that
+   must hold. Without this the auditor invents its own idea of the goal and reports
+   on that instead.
+3. **The audit lens** — tell the auditor to read and follow
+   `${CLAUDE_SKILL_DIR}/references/audit-lens.md` in full (questions, anti-patterns,
+   report format).
+4. **"You did not write this and have no stake in defending it. Be adversarial."**
+5. **"Verify by running, not by reading"** — with whatever safe way exists to exercise
+   the code (a scratch copy, a test fixture, an env var that disables a guard). A
+   finding that was reproduced outranks a finding that was reasoned.
+6. **Safety limits** — what must not be touched: no writes to real user data, no
+   commits, no pushes, no network calls with side effects. Name the scratch directory
+   it may use.
+7. **The report format** from audit-lens.md (verdict + severity per finding) and the
+   overall verdict.
+8. **The report language** from step 2.7. All prose is written in it; verdict and
+   severity labels (`FRAGILE`, `CRITICAL`, `NEEDS RETHINK`, …), code, paths and
+   quotes stay as they are.
 
-#### Q1: Is this fixing a symptom instead of the cause?
+Ask for an explicit statement of which findings were verified by execution and which
+are reasoning only. Treat the second kind as a hypothesis, not a defect.
 
-- Does the fix patch over observable behavior without addressing why it happens?
-- Would the same class of problem recur with slightly different inputs?
-- Is it adding tolerance/permissiveness to compensate for upstream incorrectness?
+### Briefing rules
 
-**Real example**: Relaxing a regex to handle more LLM output formatting quirks instead of switching to structured tool calling. The regex will always be fragile because the root problem is parsing structured data from unstructured text.
+- **Facts only, no arguments.** Quote the user's requirements verbatim. Label each
+  rejected alternative by who rejected it: the user or the main agent. Never write
+  why the main agent chose its own approach — no justifications, no hints.
+- **The auditor reads the lens itself** from `references/audit-lens.md`. Do not
+  paraphrase, summarize, or soften it in the briefing.
 
-**Signal phrases that indicate symptom-fixing:**
-- "Make the regex more permissive"
-- "Add a fallback for when X doesn't work"
-- "Strip/trim/clean the output before parsing"
-- "Add another special case for..."
-- "Retry with different parameters if it fails"
-- "Catch the exception and try the other way"
+## 4. Relay the result
 
-#### Q2: Is there a well-established solution being ignored?
+Show the user the auditor's report in full, without filtering, and say plainly which
+findings were reproduced. Write your own lines in the report language too. If you disagree with a finding, add your objection as a
+separate line below the report — never drop a finding or lower its severity. The user
+decides. Where a finding is about something you wrote, say so rather than describing
+it impersonally.
 
-- Does the language, framework, or ecosystem provide a built-in mechanism for this exact problem?
-- Is the code reimplementing something that already exists in the project's dependencies?
-- Is there an industry-standard pattern for this class of problem?
+## On a second round
 
-**Examples:**
-- Custom string-matching for LLM output → use native tool calling / function calling
-- Manual retry loops with sleep → use framework retry helpers (`retry()` in Laravel, `tenacity` in Python)
-- Hand-rolled auth token validation → use framework middleware
-- Custom event bus → use framework events/listeners
-- Manual JSON key mapping → use serialization DTOs (Spatie Data, Pydantic)
+When the user asks to audit again after fixes, use **a new auditor** and give it
+neither the first round's report nor its arguments. A reviewer that has already
+passed over the code twice stops looking at what it has cleared, and its verdict
+converges toward "fine"; a new auditor told about the old list just re-derives it.
+Re-running the previous auditor is right for exactly one purpose: verifying its own
+findings are closed, using its own reproduction recipes. If both matter, do both.
 
-#### Q3: Is the approach fragile — will it break under predictable conditions?
-
-- Does it depend on specific formatting, ordering, or timing that isn't guaranteed?
-- Does it use string matching, regex, or position-based parsing where structured data is available?
-- Would concurrent requests, retries, or edge-case inputs break it?
-- Does it assume a specific LLM output format without enforcing it?
-
-**Fragility indicators:**
-- Regex parsing of LLM/AI output
-- Position-based array access (`$result[0]`) instead of keyed access
-- Timing-dependent logic without synchronization
-- String comparison for values that should be enums
-- Implicit ordering dependencies between independent operations
-
-#### Q4: Is this a quickfix that accumulates tech debt?
-
-- Does it add complexity (new flags, special cases, conditional branches) to avoid a proper refactor?
-- Does it duplicate logic that already exists elsewhere rather than extracting a shared abstraction?
-- Does it work around a limitation by adding another layer instead of fixing the layer that has the limitation?
-- Would a new team member look at this and ask "why is it done this way?"
-
-#### Q5: Are there unhandled edge cases that matter?
-
-- What happens on page reload / browser refresh?
-- What happens on concurrent requests?
-- What happens when the external service (LLM, API) returns unexpected data?
-- What happens when the user does the same action twice quickly?
-- What if the operation partially completes then fails?
-
-#### Q6: Is the solution over-engineered for the actual problem?
-
-Not all solutions need to be the "most robust." Sometimes a simpler approach is genuinely appropriate. Flag this too — audit in both directions.
-
-- Is this adding abstraction layers for a one-time operation?
-- Is this building for hypothetical future requirements?
-- Is this adding configuration/flexibility that no one asked for?
-
-### Phase 3: Report Findings
-
-For each finding, report:
-
-```
-### [Finding title]
-
-**Verdict**: WORKAROUND | FRAGILE | SUBOPTIMAL | OVER-ENGINEERED | ROBUST
-
-**What**: [One sentence describing what was done]
-**Why it's [verdict]**: [Concrete explanation of the problem]
-**What breaks**: [Specific scenario where this fails or causes pain]
-**Better approach**: [Concrete alternative — not vague advice, but a specific technical approach]
-**Effort delta**: [Is the better approach significantly more work, or roughly the same?]
-```
-
-### Phase 4: Overall Verdict
-
-Summarize with one of:
-
-- **ROBUST** — The approach is sound. No significant concerns. Proceed with confidence.
-- **HAS CONCERNS** — Mostly good, but N specific issues should be addressed. List them ranked by severity.
-- **NEEDS RETHINK** — The fundamental approach is wrong. A different strategy is needed before proceeding. Explain what and why.
-
-## Anti-Patterns Catalog
-
-These are patterns that almost always indicate a suboptimal solution. Flag them on sight:
-
-| Anti-Pattern | Why It's Bad | Better Approach |
-|---|---|---|
-| Regex parsing of LLM output | LLMs don't guarantee text format | Structured output / tool calling |
-| "Make it more permissive" | Trades false negatives for false positives forever | Fix the source of bad data |
-| Silent fallback to expensive operation | Hides bugs, causes financial waste | Fail explicitly, let the user decide |
-| Injecting data into a wrong layer to "make it available" | Couples layers, breaks separation | Pass through the proper channel |
-| Multiple `if/else` branches for something that should be a lookup | Grows linearly with cases, easy to miss one | Map/dict/enum dispatch |
-| Catching broad exceptions to "handle" them | Hides real errors, makes debugging impossible | Catch specific exceptions |
-| Copy-pasting with slight modifications | Maintenance burden grows with each copy | Extract shared logic |
-| Adding a flag to skip/modify behavior in one place | Flag pollution, hard to trace control flow | Separate code paths or strategy pattern |
-| String concatenation for building structured data | Injection risk, encoding bugs | Use builders, templates, or serializers |
-| Re-reading data you just wrote to verify it saved | Indicates distrust of the abstraction | Trust the ORM/framework, test properly |
+Fixes are a normal place for new defects. Every round after the first must audit the
+fixes as fresh surface, not only re-check the original findings.
 
 ## Important Rules
 
-These apply to the auditor — include them in the briefing — and to you when relaying.
-
 - **The audit does not come from whoever wrote the code.** If you find yourself reviewing your own work directly instead of dispatching an auditor, stop and dispatch one. "It's a small change" is exactly when self-review reads clean.
-- **Never just say "looks good."** Even if the solution is robust, explain WHY it's robust — what makes it the right approach. The user invoked this skill because they want analysis, not rubber-stamping.
-- **Be concrete, not philosophical.** "This could be more robust" is useless. "This regex will break when the LLM adds a markdown code fence because X" is useful.
-- **Propose, don't prescribe.** Present the better approach and explain the trade-offs. The user decides whether to adopt it.
-- **Respect existing architecture.** The "better approach" must fit the project's existing patterns and conventions. Check for project rules or conventions before suggesting alternatives.
-- **Distinguish "suboptimal but fine" from "this will break."** Not everything needs to be perfect. Clearly separate critical issues from nice-to-haves.
