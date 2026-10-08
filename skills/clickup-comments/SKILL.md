@@ -35,7 +35,11 @@ How to draft and post comments on ClickUp tickets.
   details after.
 - **Answer the question directly** when the comment is a reply — don't build
   up to it.
-- **Make asks explicit.** If something is blocked or a decision is needed,
+- **Stay on the task.** Report the result of the task. Do not retell the
+  ticket or earlier comments. Add a question, decision or proposal only when
+  the task needs it to be finished or to move forward; side findings and
+  "nice to have" ideas go to the report or a separate ticket, not here.
+- **Make asks explicit.** When the task does need an answer or a decision,
   state exactly what is needed and from whom.
 - **End with the next step** when there is one — but never a deploy promise
   (see Voice).
