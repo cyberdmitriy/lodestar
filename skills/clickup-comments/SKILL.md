@@ -21,6 +21,11 @@ How to draft and post comments on ClickUp tickets.
   "Happy to…", "Feel free to…", "Let me know if…". State things plainly.
 - **Clear referents only.** Never mention a person or group the reader can't
   identify from the thread — no vague "they"/"them".
+- **Never commit Dmitry to anything.** Do not write that Dmitry will do
+  something, has decided something, or will take any action unless he
+  explicitly said so in the conversation. No "I'll remove it", "I'll set it
+  up", "I'll check", "I'll let you know". If a next step is needed, name what
+  has to happen without assigning it to him, or ask him first who does it.
 - **Never promise a future deploy.** No "goes out with the next deployment",
   "will be live after the deploy", or any variant. By the time the comment is
   read the change is normally already running, so the sentence is both wrong
