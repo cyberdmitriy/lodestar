@@ -1,6 +1,6 @@
 ---
 name: clickup-comments
-description: Use when about to post or draft a comment on a ClickUp task/ticket — replying to a question, giving a status update, or reporting what shipped. Ensures the comment is written in first person as Dmitry, short and in plain non-technical English, polished with the humanizer skill, shown as a draft first, and posted only after Dmitry's explicit OK.
+description: Use when about to post or draft a comment on a ClickUp task/ticket — replying to a question, giving a status update, or reporting what shipped. Ensures the comment is written in first person as Dmitry, short and in plain English that stays concrete (names services, branches and releases, no code), polished with the humanizer skill, shown as a draft first, and posted only after Dmitry's explicit OK.
 ---
 
 # ClickUp Comments
@@ -11,10 +11,17 @@ How to draft and post comments on ClickUp tickets.
 
 - Write in **first person as Dmitry** — as if Dmitry typed it himself.
 - **Short.** A few sentences. No walls of text.
-- **Plain language, no code.** No code blocks, no stack traces, no internal
-  identifiers (run IDs, enum values, file paths, class names). Explain *what
+- **Plain language, no code.** No code blocks, no stack traces. Explain *what
   changed and what it means*, not *how it was implemented*. The reader is a
   PM/stakeholder, not an engineer.
+- **Concrete, not abstract.** Name the things the reader can act on or ask
+  about: services, systems, branches, releases, screens, fields as users see
+  them ("the community service", "release 1.38", "the production branch").
+  Leave out what only a developer reading the code needs: file paths, class
+  and method names, enum values, run IDs. Test: could the reader pass this
+  name to someone else and get an answer? If yes, keep it. A vague stand-in
+  ("the same service", "a separate branch", "the relevant system") is worse
+  than the name.
 - **Always write in English**, regardless of the ticket's language.
 - **Greet with "Hey <name>,"** — not "Hi", "Hello", or "Dear".
 - **Neutral tone, never deferential.** Avoid eager/servile filler like

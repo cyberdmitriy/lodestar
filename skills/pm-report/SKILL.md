@@ -42,6 +42,8 @@ User says: "report for PM", "PM report", "report for the PM", "summary for PM", 
 - Process narration ("first I did X, then Y, then Z").
 - Trade-offs the PM has no decision power over.
 
+Leaving code details out does not mean going vague. Keep the names the PM can act on or pass on: services, systems, branches, releases, screens, settings. "Goes into the community service" beats "goes into the same service as the events"; "waits for release 1.38" beats "waits for the next release". Test: could the PM forward the name to someone and get an answer? If yes, keep it.
+
 ## Conditional rules (judge case-by-case)
 
 - **Before/after, navigation, repro** — apply only when they materially help the PM verify or use the change. A pure bugfix to an internal queue retry doesn't get nav paths or before/after — there's nothing the PM would see.
