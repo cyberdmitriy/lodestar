@@ -1,7 +1,8 @@
 ---
 name: visual-report
 disable-model-invocation: true
-description: Use when the user wants a polished, visual HTML report from data or findings: "visual report", "make a report", "HTML report", "report as an artifact", "dashboard from this data", "turn this into a report", "nice report", "визуальный отчёт", "сделай отчёт", "отчёт HTML", "Bericht als HTML", or any near-equivalent. Turns almost any input (findings, metrics, logs, a markdown doc, JSON) into one self-contained HTML report: metric cards, prioritized items, plain-English explanations, and charts that earn their place. Two delivery modes: a shareable Artifact link, or a local file with a click-to-comment review layer. Triggers on '/lodestar:visual-report'. For a chat-only, non-technical PM summary use '/lodestar:pm-report' instead.
+description: >-
+  Use when the user wants a polished, visual HTML report from data or findings: "visual report", "make a report", "HTML report", "report as an artifact", "dashboard from this data", "turn this into a report", "nice report", "визуальный отчёт", "сделай отчёт", "отчёт HTML", "Bericht als HTML", or any near-equivalent. Turns almost any input (findings, metrics, logs, a markdown doc, JSON) into one self-contained HTML report: metric cards, prioritized items, plain-English explanations, and charts that earn their place. Two delivery modes: a shareable Artifact link, or a local file with a click-to-comment review layer. Triggers on '/lodestar:visual-report'. For a chat-only, non-technical PM summary use '/lodestar:pm-report' instead.
 ---
 
 # Visual Report

@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: Deep code review of a branch, uncommitted changes, a layer, or a path: logic gaps, security, UI impact, spec alignment, plus error-handling, simplification and project-rule checks, with fixes only on approval.
+description: "Deep code review of a branch, uncommitted changes, a layer, or a path: logic gaps, security, UI impact, spec alignment, plus error-handling, simplification and project-rule checks, with fixes only on approval."
 disable-model-invocation: true
 argument-hint: "[uncommitted | full | <layer> | <path> | <base-ref> e.g. origin/develop | <base>..HEAD]"
 allowed-tools: Bash(git *)
