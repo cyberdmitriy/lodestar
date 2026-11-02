@@ -10,7 +10,11 @@ How to draft and post comments on ClickUp tickets.
 ## Voice
 
 - Write in **first person as Dmitry** — as if Dmitry typed it himself.
-- **Short.** A few sentences. No walls of text.
+- **Short and concrete. No filler.** Every sentence carries a fact, a result, a
+  decision or a question. Cut any sentence that only frames, softens, explains
+  the sentence before it, or retells the thread. Several results or items: a
+  list, one short line each. The comment's purpose decides its shape (status
+  report, answer, question, heads-up); there is no fixed template.
 - **Plain language, no code.** No code blocks, no stack traces. Explain *what
   changed and what it means*, not *how it was implemented*. The reader is a
   PM/stakeholder, not an engineer.
@@ -55,6 +59,27 @@ How to draft and post comments on ClickUp tickets.
   (see Voice).
 - **No filler closers.** Stop when the point is made — don't tack on
   unsolicited offers or hedges at the end.
+
+Example, a status report with a question:
+
+❌ Wordy
+> Hey Anna,
+>
+> I went with your suggestion and run the export every night now. The rest of
+> the admin part is built as well: the customer form has the new required field
+> Region, and a region that is switched off can't be picked anymore. About the
+> regions: the spec only says "the regions we serve" and names five of them, so
+> the list has 12 regions: those five plus 7 I added. Does the client want other
+> regions in the list? If not, it stays as it is.
+
+✅ Concrete
+> Hey Anna,
+>
+> Done:
+> - The export runs every night.
+> - Customer form: new required field Region. Switched-off regions can't be picked.
+>
+> Regions: the list has 12, the five from the spec plus 7 I added. Does the client want others? Otherwise the list stays.
 
 ## Procedure (never skip a step)
 
