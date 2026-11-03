@@ -41,7 +41,7 @@ A pane beside the chat with the project's working folders (each repo and its git
 worktrees), the branch checked out in each, the URLs to open, the containers that
 belong to each folder, and a list of docs that open in the app's file viewer. A row above
 the prompt shows a summary, toggles the pane, and names the folder of the agent's
-last edit. `/workspace` opens the pane too.
+last edit. `/workspace` opens the pane too; it never opens by itself.
 
 It shows only in projects with a `.claude/workspace-map.json`; `{}` is enough for a
 single repository at the project root:
@@ -58,8 +58,7 @@ single repository at the project root:
 
 - `repos`: git repositories, relative to the project root; their worktrees are listed by `git worktree list`.
   Default: the project root.
-- `promptBar`: the row above the prompt, on by default. `false` hides it and keeps the pane from opening at
-  session start; `/workspace` still opens it.
+- `promptBar`: the row above the prompt, on by default. `false` hides it; `/workspace` still opens the pane.
 - `urls`: a URL per container name, shown on the folder the container belongs to.
 - `containers`: assigns a container to a folder by hand. Otherwise a container goes by its
   `dev.folder` label (`docker run --label dev.folder=<folder>`), then by the folder its bind mounts

@@ -8,7 +8,7 @@ export type UrlEntry = { url: string; label?: string }
 export type Config = {
   // git repositories relative to the project root; the root itself when the config names none
   repos: string[]
-  // the row above the prompt; off, the pane opens by the command alone
+  // the row above the prompt
   promptBar: boolean
   urls: Record<string, UrlEntry>
   containers: Record<string, string>

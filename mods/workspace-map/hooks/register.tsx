@@ -159,16 +159,11 @@ export const register: Register = on => {
     })
     const started = await next(e)
 
-    void (async () => {
-      // Always refresh: the band's summary needs fresh data while the pane is
-      // closed, and a config added later is picked up by the command
-      $.clock.every(REFRESH_MS, () => void refresh($))
-      const error = await reload($)
-      if (error) return
-      const { value: cfg } = await $.state.get(CONFIG)
-      // With the prompt bar off the pane opens by the command alone
-      if (cfg?.promptBar) await $.ui.open({ id: PANE, title: TITLE })
-    })()
+    // Always refresh: the band's summary needs fresh data while the pane is
+    // closed, and a config added later is picked up by the command. The pane
+    // itself opens only on request: the command or the band's button
+    $.clock.every(REFRESH_MS, () => void refresh($))
+    void reload($)
 
     return started
   })
