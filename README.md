@@ -68,19 +68,14 @@ single repository at the project root:
 
 ## Install
 
-### On this machine
-
-The plugin auto-loads from `~/.claude/skills/lodestar/` — no setup needed.
-
-### On another machine
-
 ```
 /plugin marketplace add https://github.com/cyberdmitriy/lodestar.git
 /plugin install lodestar@lodestar-marketplace
 ```
 
 This repo is both the plugin and its own marketplace (`.claude-plugin/plugin.json`
-+ `.claude-plugin/marketplace.json`).
++ `.claude-plugin/marketplace.json`). Mods from the same marketplace are installed
+separately, as shown under each mod.
 
 ## Layout
 
@@ -88,7 +83,7 @@ This repo is both the plugin and its own marketplace (`.claude-plugin/plugin.jso
 lodestar/
 ├── .claude-plugin/
 │   ├── plugin.json         # plugin manifest
-│   └── marketplace.json    # marketplace catalog (source: "./")
+│   └── marketplace.json    # marketplace catalog: lodestar ("./") and each mod
 ├── skills/
 │   └── <skill>/SKILL.md
 └── mods/

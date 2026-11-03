@@ -21,3 +21,6 @@ CLAUDE.md
 
 # Local copies of upstream docs used by audit-skill diffs (not redistributed)
 skills/audit-skill/snapshots/
+
+# Types the engine writes into a mod folder it loads with --plugin-dir (they list local MCP tools)
+mods/*/.claude-plugin/types/
