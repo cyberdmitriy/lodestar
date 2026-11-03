@@ -17,13 +17,17 @@ All skills are invoked as `/lodestar:<skill>`.
 | audit-skill | `/lodestar:audit-skill` | Audit a skill against Anthropic's skill-authoring best practices and fix approved findings; `self-update` re-syncs with the live docs |
 | check-rules | `/lodestar:check-rules` | Check code against `.claude/rules/` and report violations |
 | audit-solution | `/lodestar:audit-solution` | Vet plans/solutions for workarounds and fragile approaches |
+| grilling | `/lodestar:grilling` | Stress-test a plan, decision or idea with relentless questions |
 | error-handling-audit | `/lodestar:error-handling-audit` | Find silent failures and logging gaps (Python, Laravel, React) |
 | design-fresh | `/lodestar:design-fresh` | Intentional, trend-aware UI with a creative reset on demand + cross-session design journal |
 | design-variations | `/lodestar:design-variations` | Render N distinct design options as one click-to-comment HTML artifact |
+| design-reference | `/lodestar:design-reference` | UI/UX reference: styles, palettes, font pairings, charts and stack-specific guidance |
+| visual-tuner | `/lodestar:visual-tuner` | Interactive HTML tuner for CSS values that are hard to hit by eye; send back the exact values |
 | bookmarks | `/lodestar:bookmarks` | Search, file, audit and reorganize Chrome bookmarks via a sidecar index |
 | clickup-tasks | `/lodestar:clickup-tasks` | Draft and create ClickUp tasks to board convention |
 | clickup-comments | `/lodestar:clickup-comments` | Draft and post ClickUp comments in plain English |
 | pm-report | `/lodestar:pm-report` | Plain-language, non-technical session report for a PM |
+| visual-report | `/lodestar:visual-report` | Polished HTML report from data or findings, as an Artifact link or a local file |
 | explain | `/lodestar:explain` | Developer-facing walkthrough of a change, mechanism, bug, task, decision or concept, on one concrete example |
 | session-handoff | `/lodestar:session-handoff` | End-of-session handoff in chat so a fresh agent can continue after `/clear` |
 
