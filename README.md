@@ -39,7 +39,7 @@ The marketplace also carries a mod, a separate plugin installed on its own.
 
 A pane beside the chat with the project's working folders (each repo and its git
 worktrees), the branch checked out in each, the URLs to open, the containers that
-belong to each folder, and a list of docs that open inside the pane. A row above
+belong to each folder, and a list of docs that open in the app's file viewer. A row above
 the prompt shows a summary, toggles the pane, and names the folder of the agent's
 last edit. `/workspace` opens the pane too.
 
@@ -64,8 +64,8 @@ single repository at the project root:
 - `containers`: assigns a container to a folder by hand. Otherwise a container goes by its
   `dev.folder` label (`docker run --label dev.folder=<folder>`), then by the folder its bind mounts
   or compose project sit in.
-- `docs`: Markdown files listed on the Docs tab; without any, the tab is not shown. HTML comments in them
-  are not shown; Mermaid blocks are shown as code.
+- `docs`: files listed as links on the Docs tab; a click opens the file in the app's own file viewer.
+  Without any, the tab is not shown.
 
 ```
 /plugin install workspace-map@lodestar-marketplace

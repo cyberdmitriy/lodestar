@@ -1,4 +1,4 @@
-// A link the project's config lists for the Documents tab
+// A link the project's config lists for the Docs tab
 export type DocLink = { label: string; path: string }
 
 // A URL the config names for one container
@@ -39,9 +39,7 @@ export type Snapshot = {
   updatedAt: number
 }
 
-export type OpenDoc = { label: string; path: string; text: string }
-
-export type Tab = 'stand' | 'docs' | 'doc'
+export type Tab = 'stand' | 'docs'
 
 // The number in a key changes with that value's fields: a value an earlier
 // version stored outlives a reload, and a new key leaves it unread.
@@ -50,9 +48,8 @@ declare module 'claude-code' {
     'workspace-map': {
       config2: Config | null
       snapshot2: Snapshot | null
-      tab: Tab
+      tab1: Tab
       expanded1: string[]
-      doc2: OpenDoc | null
       // folder of the agent's last edit, as the panel names it; './' for the project root
       active1: string | null
     }

@@ -4,12 +4,12 @@ import type { Config, ContainerInfo, FolderInfo, RepoInfo, Snapshot, UrlEntry } 
 import {
   attribute,
   baseName,
+  docLinks,
   parseConfig,
   parseInspect,
   parseWorktrees,
   relativePath,
   resolvePath,
-  stripComments,
   summaryLabel,
 } from './collect'
 import type { DockerContainer } from './collect'
@@ -22,9 +22,8 @@ const REFRESH_MS = 15_000
 // State refs: `plugin` and `key` stay literals, as `claude plugin validate` reads them
 const CONFIG = { plugin: 'workspace-map', key: 'config2' } as const
 const SNAPSHOT = { plugin: 'workspace-map', key: 'snapshot2' } as const
-const TAB = { plugin: 'workspace-map', key: 'tab' } as const
+const TAB = { plugin: 'workspace-map', key: 'tab1' } as const
 const EXPANDED = { plugin: 'workspace-map', key: 'expanded1' } as const
-const DOC = { plugin: 'workspace-map', key: 'doc2' } as const
 const ACTIVE = { plugin: 'workspace-map', key: 'active1' } as const
 
 type Loaded = { config: Config } | { error: string }
@@ -255,7 +254,6 @@ export const register: Register = on => {
     const { value: cfg } = await $.state.get(CONFIG)
     const { value: snap } = await $.state.get(SNAPSHOT)
     const { value: currentTab = 'stand' } = await $.state.get(TAB)
-    const { value: doc } = await $.state.get(DOC)
     const { value: open = [] } = await $.state.get(EXPANDED)
     const hasContainers = !!snap?.repos.some(r => r.folders.some(f => f.containers.length > 0))
     const hasDocs = !!cfg && cfg.docs.length > 0
@@ -402,31 +400,9 @@ export const register: Register = on => {
       )
     }
 
-    // The desktop draws a file: link as plain text, so a doc opens in a tab of this pane
-    const docsTab = () => {
-      if (!cfg || !hasDocs) return null
-      return (
-        <Box flexDirection="column" gap="xs">
-          {cfg.docs.map(d => (
-            <Button
-              key={`doc:${d.path}`}
-              label={d.label}
-              plain
-              onPress={async () => {
-                let text: string
-                try {
-                  text = await $.fs.read(resolvePath(root, d.path))
-                } catch (err) {
-                  text = `Cannot read \`${d.path}\`: ${messageOf(err)}`
-                }
-                await $.state.set(DOC, { label: d.label, path: d.path, text })
-                await $.state.set(TAB, 'doc')
-              }}
-            />
-          ))}
-        </Box>
-      )
-    }
+    // A Link element draws a file: URL as plain text on desktop, but a link in Markdown opens
+    // the file in the app's own viewer
+    const docsTab = () => (cfg && hasDocs ? <Markdown text={docLinks(root, cfg.docs)} /> : null)
 
     const root = await $.session.root()
 
@@ -449,41 +425,10 @@ export const register: Register = on => {
               onPress={() => void $.state.set(TAB, 'docs')}
             />
           ) : null}
-          {doc ? (
-            <Button
-              key="tab:doc"
-              label={doc.label}
-              variant={currentTab === 'doc' ? 'primary' : 'secondary'}
-              onPress={() => void $.state.set(TAB, 'doc')}
-            />
-          ) : null}
           <Box flexGrow={1} />
           <Button key="refresh" label="Refresh" onPress={() => void refresh($)} />
         </Box>
-        {currentTab === 'doc' && doc ? (
-          <Box flexDirection="column" gap={1}>
-            <Box flexDirection="row" alignItems="center" gap={1}>
-              <Box flexGrow={1} flexShrink={1}>
-                <Text size="footnote" dimColor wrap="truncate-start">
-                  {doc.path}
-                </Text>
-              </Box>
-              <Button
-                key="close-doc"
-                label="Close"
-                onPress={async () => {
-                  await $.state.set(DOC, null)
-                  await $.state.set(TAB, 'docs')
-                }}
-              />
-            </Box>
-            <Markdown text={stripComments(doc.text)} />
-          </Box>
-        ) : hasDocs && (currentTab === 'docs' || currentTab === 'doc') ? (
-          docsTab()
-        ) : (
-          standTab()
-        )}
+        {hasDocs && currentTab === 'docs' ? docsTab() : standTab()}
       </Box>
     )
   })

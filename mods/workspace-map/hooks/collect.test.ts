@@ -2,11 +2,11 @@ import { expect, test } from 'claude-code/testing'
 
 import {
   attribute,
+  docLinks,
   parseConfig,
   parseInspect,
   parseWorktrees,
   relativePath,
-  stripComments,
   summaryLabel,
 } from './collect'
 
@@ -117,29 +117,16 @@ test('folders are shown relative to the project', async () => {
   expect(relativePath(ROOT, '/elsewhere/x')).toBe('/elsewhere/x/')
 })
 
-test('HTML comments are cut from a doc, fenced code is kept', async () => {
-  const doc = [
-    '# Title',
-    '',
-    '<!-- Source: notes.md -->',
-    '',
-    '| a | b |',
-    '',
-    '<!--',
-    'Sources:',
-    '',
-    '- one',
-    '-->',
-    '',
-    'Text <!-- aside --> after.',
-    '',
-    '```mermaid',
-    'a --> b',
-    '<!-- kept -->',
-    '```',
-  ].join('\n')
-  expect(stripComments(doc)).toBe(
-    ['# Title', '', '| a | b |', '', 'Text  after.', '', '```mermaid', 'a --> b', '<!-- kept -->', '```'].join('\n'),
+test('docs become file links the app viewer opens', async () => {
+  expect(
+    docLinks(ROOT, [
+      { label: 'Local setup', path: 'docs/local-setup.md' },
+      { label: 'Notes [old]', path: 'docs/my notes (v2).md' },
+    ]),
+  ).toBe(
+    [
+      '- [Local setup](file:///work/proj/docs/local-setup.md)',
+      '- [Notes \\[old\\]](file:///work/proj/docs/my%20notes%20%28v2%29.md)',
+    ].join('\n'),
   )
-  expect(stripComments('plain\n\n\ntext')).toBe('plain\n\n\ntext')
 })
