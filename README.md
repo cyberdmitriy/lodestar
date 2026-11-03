@@ -64,7 +64,8 @@ single repository at the project root:
 - `containers`: assigns a container to a folder by hand. Otherwise a container goes by its
   `dev.folder` label (`docker run --label dev.folder=<folder>`), then by the folder its bind mounts
   or compose project sit in.
-- `docs`: Markdown files listed on the Docs tab; without any, the tab is not shown.
+- `docs`: Markdown files listed on the Docs tab; without any, the tab is not shown. HTML comments in them
+  are not shown; Mermaid blocks are shown as code.
 
 ```
 /plugin install workspace-map@lodestar-marketplace

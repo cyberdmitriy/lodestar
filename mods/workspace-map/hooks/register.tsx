@@ -9,6 +9,7 @@ import {
   parseWorktrees,
   relativePath,
   resolvePath,
+  stripComments,
   summaryLabel,
 } from './collect'
 import type { DockerContainer } from './collect'
@@ -476,7 +477,7 @@ export const register: Register = on => {
                 }}
               />
             </Box>
-            <Markdown text={doc.text} />
+            <Markdown text={stripComments(doc.text)} />
           </Box>
         ) : hasDocs && (currentTab === 'docs' || currentTab === 'doc') ? (
           docsTab()

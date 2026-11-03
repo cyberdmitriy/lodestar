@@ -1,6 +1,14 @@
 import { expect, test } from 'claude-code/testing'
 
-import { attribute, parseConfig, parseInspect, parseWorktrees, relativePath, summaryLabel } from './collect'
+import {
+  attribute,
+  parseConfig,
+  parseInspect,
+  parseWorktrees,
+  relativePath,
+  stripComments,
+  summaryLabel,
+} from './collect'
 
 const ROOT = '/work/proj'
 
@@ -107,4 +115,31 @@ test('the summary names only what the project has', async () => {
 test('folders are shown relative to the project', async () => {
   expect(relativePath(ROOT, '/work/proj/worktrees/backend-T-1')).toBe('worktrees/backend-T-1/')
   expect(relativePath(ROOT, '/elsewhere/x')).toBe('/elsewhere/x/')
+})
+
+test('HTML comments are cut from a doc, fenced code is kept', async () => {
+  const doc = [
+    '# Title',
+    '',
+    '<!-- Source: notes.md -->',
+    '',
+    '| a | b |',
+    '',
+    '<!--',
+    'Sources:',
+    '',
+    '- one',
+    '-->',
+    '',
+    'Text <!-- aside --> after.',
+    '',
+    '```mermaid',
+    'a --> b',
+    '<!-- kept -->',
+    '```',
+  ].join('\n')
+  expect(stripComments(doc)).toBe(
+    ['# Title', '', '| a | b |', '', 'Text  after.', '', '```mermaid', 'a --> b', '<!-- kept -->', '```'].join('\n'),
+  )
+  expect(stripComments('plain\n\n\ntext')).toBe('plain\n\n\ntext')
 })

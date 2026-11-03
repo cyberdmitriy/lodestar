@@ -89,6 +89,60 @@ export function summaryLabel(snapshot: Snapshot): string | undefined {
   return parts.length > 0 ? parts.join(' · ') : undefined
 }
 
+// The pane's Markdown draws HTML comments as text, so they are cut before drawing. Fenced code
+// stays as written; a line left empty by a comment goes, with the blank line it would double
+export function stripComments(markdown: string): string {
+  const out: string[] = []
+  let fence: string | undefined
+  let inComment = false
+  let dropped = false
+  for (const line of markdown.split('\n')) {
+    if (!inComment) {
+      const marker = /^\s*(`{3,}|~{3,})/.exec(line)?.[1]
+      if (fence) {
+        if (marker && marker[0] === fence[0] && marker.length >= fence.length) fence = undefined
+        out.push(line)
+        continue
+      }
+      if (marker) {
+        fence = marker
+        out.push(line)
+        continue
+      }
+    }
+    let kept = ''
+    let rest = line
+    let touched = inComment
+    for (;;) {
+      if (inComment) {
+        const end = rest.indexOf('-->')
+        if (end < 0) break
+        rest = rest.slice(end + 3)
+        inComment = false
+      } else {
+        const start = rest.indexOf('<!--')
+        if (start < 0) {
+          kept += rest
+          break
+        }
+        kept += rest.slice(0, start)
+        rest = rest.slice(start + 4)
+        inComment = true
+        touched = true
+      }
+    }
+    const isBlank = kept.trim() === ''
+    if (touched && isBlank) {
+      dropped = true
+      continue
+    }
+    if (dropped && isBlank && out.at(-1)?.trim() === '') continue
+    if (!isBlank) dropped = false
+    out.push(kept)
+  }
+  return out.join('\n')
+}
+
 export function baseName(path: string): string {
   return path.split('/').filter(Boolean).pop() ?? path
 }
