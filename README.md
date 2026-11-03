@@ -27,6 +27,40 @@ All skills are invoked as `/lodestar:<skill>`.
 | explain | `/lodestar:explain` | Developer-facing walkthrough of a change, mechanism, bug, task, decision or concept, on one concrete example |
 | session-handoff | `/lodestar:session-handoff` | End-of-session handoff in chat so a fresh agent can continue after `/clear` |
 
+## Mods
+
+The marketplace also carries a mod, a separate plugin installed on its own.
+
+### dev-cheatsheet
+
+A pane beside the chat with the project's working folders (each repo and its git
+worktrees), the branch checked out in each, the URLs to open, the containers that
+belong to each folder, and a list of docs that open inside the pane. A row above
+the prompt shows a summary, toggles the pane, and names the folder of the agent's
+last edit. `/cheatsheet` opens the pane too.
+
+It shows only in projects with a `.claude/cheatsheet.json`:
+
+```json
+{
+  "repos": ["backend", "frontend"],
+  "urls": { "web-dev": { "label": "Frontend", "url": "https://localhost" } },
+  "containers": { "branch-router": "worktrees/backend-T-1" },
+  "docs": [{ "label": "Local setup", "path": "docs/local-setup.md" }]
+}
+```
+
+- `repos`: git repositories, relative to the project root; their worktrees are listed by `git worktree list`.
+- `urls`: a URL per container name, shown on the folder the container belongs to.
+- `containers`: assigns a container to a folder by hand. Otherwise a container goes by its
+  `dev.folder` label (`docker run --label dev.folder=<folder>`), then by the folder its bind mounts
+  or compose project sit in.
+- `docs`: Markdown files listed on the Docs tab.
+
+```
+/plugin install dev-cheatsheet@lodestar-marketplace
+```
+
 ## Install
 
 ### On this machine
@@ -50,8 +84,10 @@ lodestar/
 ├── .claude-plugin/
 │   ├── plugin.json         # plugin manifest
 │   └── marketplace.json    # marketplace catalog (source: "./")
-└── skills/
-    └── <skill>/SKILL.md
+├── skills/
+│   └── <skill>/SKILL.md
+└── mods/
+    └── <mod>/              # a plugin of its own: .claude-plugin/, hooks/, types/
 ```
 
 ## License

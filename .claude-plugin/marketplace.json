@@ -9,6 +9,11 @@
       "name": "lodestar",
       "source": "./",
       "description": "Dmitry's custom workflow, review, rules, ClickUp, and reporting skills."
+    },
+    {
+      "name": "dev-cheatsheet",
+      "source": "./mods/dev-cheatsheet",
+      "description": "Pane with the project's working folders, their branches, URLs and containers, plus doc links, read from .claude/cheatsheet.json"
     }
   ]
 }
