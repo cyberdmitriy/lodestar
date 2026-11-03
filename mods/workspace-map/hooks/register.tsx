@@ -3,26 +3,28 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { Config, ContainerInfo, FolderInfo, RepoInfo, Snapshot, UrlEntry } from '../types'
 import {
   attribute,
+  baseName,
   parseConfig,
   parseInspect,
   parseWorktrees,
   relativePath,
   resolvePath,
+  summaryLabel,
 } from './collect'
 import type { DockerContainer } from './collect'
 
-const PANE = 'dev-cheatsheet'
-const TITLE = 'Dev cheatsheet'
-const CONFIG_FILE = '.claude/cheatsheet.json'
+const PANE = 'workspace-map'
+const TITLE = 'Workspace Map'
+const CONFIG_FILE = '.claude/workspace-map.json'
 const REFRESH_MS = 15_000
 
 // State refs: `plugin` and `key` stay literals, as `claude plugin validate` reads them
-const CONFIG = { plugin: 'dev-cheatsheet', key: 'config1' } as const
-const SNAPSHOT = { plugin: 'dev-cheatsheet', key: 'snapshot1' } as const
-const TAB = { plugin: 'dev-cheatsheet', key: 'tab' } as const
-const EXPANDED = { plugin: 'dev-cheatsheet', key: 'expanded1' } as const
-const DOC = { plugin: 'dev-cheatsheet', key: 'doc2' } as const
-const ACTIVE = { plugin: 'dev-cheatsheet', key: 'active1' } as const
+const CONFIG = { plugin: 'workspace-map', key: 'config2' } as const
+const SNAPSHOT = { plugin: 'workspace-map', key: 'snapshot2' } as const
+const TAB = { plugin: 'workspace-map', key: 'tab' } as const
+const EXPANDED = { plugin: 'workspace-map', key: 'expanded1' } as const
+const DOC = { plugin: 'workspace-map', key: 'doc2' } as const
+const ACTIVE = { plugin: 'workspace-map', key: 'active1' } as const
 
 type Loaded = { config: Config } | { error: string }
 
@@ -91,6 +93,7 @@ async function refresh($: EngineInterface): Promise<void> {
 
   const repos: RepoInfo[] = repoFolders.map(r => ({
     name: r.name,
+    label: baseName(resolvePath(root, r.name)),
     ...(r.error ? { error: r.error } : {}),
     folders: r.worktrees.map((w): FolderInfo => {
       const inFolder = byFolder.get(w.path) ?? []
@@ -151,26 +154,29 @@ async function openPane($: EngineInterface): Promise<string | undefined> {
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
-      name: 'cheatsheet',
-      description: 'Dev cheatsheet: folders, branches, URLs, containers, docs',
+      name: 'workspace',
+      description: 'Workspace Map: folders, branches, URLs, containers, docs',
     })
     const started = await next(e)
 
     void (async () => {
+      // Always refresh: the band's summary needs fresh data while the pane is
+      // closed, and a config added later is picked up by the command
+      $.clock.every(REFRESH_MS, () => void refresh($))
       const error = await reload($)
       if (error) return
-      await $.ui.open({ id: PANE, title: TITLE })
-      // Always refresh: the band's summary needs fresh data while the pane is closed
-      $.clock.every(REFRESH_MS, () => void refresh($))
+      const { value: cfg } = await $.state.get(CONFIG)
+      // With the prompt bar off the pane opens by the command alone
+      if (cfg?.promptBar) await $.ui.open({ id: PANE, title: TITLE })
     })()
 
     return started
   })
 
-  on('command.run', { command: 'cheatsheet' }, async $ => {
+  on('command.run', { command: 'workspace' }, async $ => {
     const error = await openPane($)
 
-    return { text: error ?? 'Dev cheatsheet opened.' }
+    return { text: error ?? 'Workspace Map opened.' }
   })
 
   on('tool.call', async ($, e, next) => {
@@ -188,32 +194,25 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const { value: cfg } = await $.state.get(CONFIG)
-    if (e.props.hasSurvey || !cfg) return next(e)
+    if (e.props.hasSurvey || !cfg || !cfg.promptBar) return next(e)
 
     const { Box, Button, Text } = $.ui.resolve(e)
     const { value: snap } = await $.state.get(SNAPSHOT)
     const { value: active } = await $.state.get(ACTIVE)
-    const folders = snap?.repos.flatMap(r => r.folders) ?? []
-    const worktrees = snap?.repos.reduce((n, r) => n + Math.max(0, r.folders.length - 1), 0) ?? 0
-    const containers = folders.flatMap(f => f.containers)
-    const running = containers.filter(c => c.isRunning).length
-    const summary = snap
-      ? `${worktrees} ${worktrees === 1 ? 'worktree' : 'worktrees'} · containers ${running} of ${containers.length} running`
-      : 'Cheatsheet'
+    const summary = (snap && summaryLabel(snap)) ?? TITLE
 
     // Left: where the agent last edited; right: the summary, which opens the pane
     const lastEdit = () => {
       if (!active) return null
-      if (active === './') {
-        return (
+      const repo = snap?.repos.find(r => r.folders.some(f => f.path === active))
+      const folder = repo?.folders.find(f => f.path === active)
+      if (!repo || !folder) {
+        return active === './' ? (
           <Text size="footnote" dimColor wrap="truncate-end">
             Last edit: project root
           </Text>
-        )
+        ) : null
       }
-      const repo = snap?.repos.find(r => r.folders.some(f => f.path === active))
-      const folder = repo?.folders.find(f => f.path === active)
-      if (!repo || !folder) return null
       const isMain = repo.folders[0] === folder
       return (
         <Box flexDirection="row" gap={1} flexShrink={1}>
@@ -221,7 +220,7 @@ export const register: Register = on => {
             Last edit:
           </Text>
           <Text size="footnote" weight="semibold" wrap="truncate-end">
-            {folder.path}
+            {folderTitle(folder.path)}
           </Text>
           <Text size="footnote" color={isMain ? 'warning' : 'suggestion'} wrap="truncate-end">
             {folder.branch}
@@ -235,7 +234,7 @@ export const register: Register = on => {
         <Box flexShrink={1}>{lastEdit()}</Box>
         <Box flexDirection="row" alignItems="center" gap={1} flexShrink={0}>
           <Button
-            key="toggle-cheatsheet"
+            key="toggle-map"
             label={summary}
             plain
             onPress={async () => {
@@ -257,6 +256,8 @@ export const register: Register = on => {
     const { value: currentTab = 'stand' } = await $.state.get(TAB)
     const { value: doc } = await $.state.get(DOC)
     const { value: open = [] } = await $.state.get(EXPANDED)
+    const hasContainers = !!snap?.repos.some(r => r.folders.some(f => f.containers.length > 0))
+    const hasDocs = !!cfg && cfg.docs.length > 0
     // Main folder of a repo: orange, it shows what the base branch runs;
     // a worktree: blue, a task's branch
     const tone = (isMain: boolean) => (isMain ? 'warning' : 'suggestion')
@@ -275,6 +276,8 @@ export const register: Register = on => {
 
     const containerLines = (folder: FolderInfo) => {
       const list = folder.containers
+      // A project without containers gets no container lines at all
+      if (!hasContainers) return []
       if (list.length === 0) {
         return [
           <Text key="c" size="footnote" dimColor>
@@ -348,30 +351,24 @@ export const register: Register = on => {
         borderStyle="round"
         borderColor={isMain ? 'subtle' : tone(false)}
       >
-        <Text weight="semibold">{folder.path}</Text>
+        <Text weight="semibold">{folderTitle(folder.path)}</Text>
         {branchPill(folder.branch, isMain)}
-        {folder.urls.length === 0 ? (
-          <Text size="footnote" dimColor>
-            No URL in the config
-          </Text>
-        ) : (
-          folder.urls.map((u, i) => (
-            <Box key={`url:${i}`} flexDirection="row" gap={1}>
-              <Link href={u.url} label={u.url} />
-              {folder.urls.length > 1 && u.label ? (
-                <Text size="footnote" dimColor>
-                  {u.label}
-                </Text>
-              ) : null}
-            </Box>
-          ))
-        )}
+        {folder.urls.map((u, i) => (
+          <Box key={`url:${i}`} flexDirection="row" gap={1}>
+            <Link href={u.url} label={u.url} />
+            {folder.urls.length > 1 && u.label ? (
+              <Text size="footnote" dimColor>
+                {u.label}
+              </Text>
+            ) : null}
+          </Box>
+        ))}
         {containerLines(folder)}
       </Box>
     )
 
     const repoBlock = (repo: RepoInfo) => {
-      const heading = repo.name.replace(/\/+$/, '').split('/').pop()?.toUpperCase() ?? repo.name
+      const heading = repo.label.toUpperCase()
       return (
         <Box key={`repo:${repo.name}`} flexDirection="column" gap={1}>
           <Text size="heading" weight="bold">
@@ -393,7 +390,10 @@ export const register: Register = on => {
       return (
         <Box flexDirection="column" gap={2}>
           {snap.repos.map(repoBlock)}
-          {snap.dockerError ? <Text color="error">{`docker: ${snap.dockerError}`}</Text> : null}
+          {/* Docker matters only to a project that names containers */}
+          {snap.dockerError && cfg && (Object.keys(cfg.urls).length > 0 || Object.keys(cfg.containers).length > 0) ? (
+            <Text size="footnote" color="warning">{`docker: ${snap.dockerError}`}</Text>
+          ) : null}
           <Text size="caption" dimColor>
             {`Updated ${pad(time.getHours())}:${pad(time.getMinutes())}:${pad(time.getSeconds())}`}
           </Text>
@@ -403,7 +403,7 @@ export const register: Register = on => {
 
     // The desktop draws a file: link as plain text, so a doc opens in a tab of this pane
     const docsTab = () => {
-      if (!cfg || cfg.docs.length === 0) return <Text dimColor>No docs in the config.</Text>
+      if (!cfg || !hasDocs) return null
       return (
         <Box flexDirection="column" gap="xs">
           {cfg.docs.map(d => (
@@ -412,7 +412,12 @@ export const register: Register = on => {
               label={d.label}
               plain
               onPress={async () => {
-                const text = await $.fs.read(resolvePath(root, d.path))
+                let text: string
+                try {
+                  text = await $.fs.read(resolvePath(root, d.path))
+                } catch (err) {
+                  text = `Cannot read \`${d.path}\`: ${messageOf(err)}`
+                }
                 await $.state.set(DOC, { label: d.label, path: d.path, text })
                 await $.state.set(TAB, 'doc')
               }}
@@ -435,12 +440,14 @@ export const register: Register = on => {
             variant={currentTab === 'stand' ? 'primary' : 'secondary'}
             onPress={() => void $.state.set(TAB, 'stand')}
           />
-          <Button
-            key="tab:docs"
-            label="Docs"
-            variant={currentTab === 'docs' ? 'primary' : 'secondary'}
-            onPress={() => void $.state.set(TAB, 'docs')}
-          />
+          {hasDocs ? (
+            <Button
+              key="tab:docs"
+              label="Docs"
+              variant={currentTab === 'docs' ? 'primary' : 'secondary'}
+              onPress={() => void $.state.set(TAB, 'docs')}
+            />
+          ) : null}
           {doc ? (
             <Button
               key="tab:doc"
@@ -471,7 +478,7 @@ export const register: Register = on => {
             </Box>
             <Markdown text={doc.text} />
           </Box>
-        ) : currentTab === 'docs' || currentTab === 'doc' ? (
+        ) : hasDocs && (currentTab === 'docs' || currentTab === 'doc') ? (
           docsTab()
         ) : (
           standTab()
@@ -479,6 +486,11 @@ export const register: Register = on => {
       </Box>
     )
   })
+}
+
+// A repo named "." lists the project root as its main folder
+function folderTitle(path: string): string {
+  return path === './' ? 'project root' : path
 }
 
 function firstLine(text: string): string {

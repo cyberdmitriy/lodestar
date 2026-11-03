@@ -1,5 +1,5 @@
 // Pure parsing and matching, kept apart from the hooks so tests can run it
-import type { Config, DocLink, UrlEntry } from '../types'
+import type { Config, DocLink, Snapshot, UrlEntry } from '../types'
 
 export type Worktree = { path: string; branch: string }
 
@@ -35,9 +35,15 @@ export function relativePath(root: string, abs: string): string {
 }
 
 export function parseConfig(text: string): Config {
-  const raw = JSON.parse(text) as Record<string, unknown>
-  if (!Array.isArray(raw.repos) || raw.repos.some(r => typeof r !== 'string')) {
+  const parsed = JSON.parse(text) as unknown
+  if (!isRecord(parsed)) throw new Error('the config must be a JSON object')
+  const raw = parsed
+  const repos = raw.repos === undefined ? ['.'] : raw.repos
+  if (!Array.isArray(repos) || repos.some(r => typeof r !== 'string')) {
     throw new Error('"repos" must be a list of folder paths')
+  }
+  if (raw.promptBar !== undefined && typeof raw.promptBar !== 'boolean') {
+    throw new Error('"promptBar" must be true or false')
   }
   const urls: Record<string, UrlEntry> = {}
   for (const [name, value] of Object.entries(asRecord(raw.urls))) {
@@ -62,7 +68,29 @@ export function parseConfig(text: string): Config {
       })
     }
   }
-  return { repos: raw.repos as string[], urls, containers, docs }
+  return {
+    repos: repos.length > 0 ? (repos as string[]) : ['.'],
+    promptBar: raw.promptBar !== false,
+    urls,
+    containers,
+    docs,
+  }
+}
+
+// What the row above the prompt says: worktrees and containers, each only
+// when there are any; nothing when the project has neither
+export function summaryLabel(snapshot: Snapshot): string | undefined {
+  const worktrees = snapshot.repos.reduce((n, r) => n + Math.max(0, r.folders.length - 1), 0)
+  const containers = snapshot.repos.flatMap(r => r.folders.flatMap(f => f.containers))
+  const running = containers.filter(c => c.isRunning).length
+  const parts: string[] = []
+  if (worktrees > 0) parts.push(`${worktrees} ${worktrees === 1 ? 'worktree' : 'worktrees'}`)
+  if (containers.length > 0) parts.push(`containers ${running} of ${containers.length} running`)
+  return parts.length > 0 ? parts.join(' · ') : undefined
+}
+
+export function baseName(path: string): string {
+  return path.split('/').filter(Boolean).pop() ?? path
 }
 
 export function parseWorktrees(stdout: string): Worktree[] {

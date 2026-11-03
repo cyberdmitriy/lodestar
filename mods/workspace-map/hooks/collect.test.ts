@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { attribute, parseConfig, parseInspect, parseWorktrees, relativePath } from './collect'
+import { attribute, parseConfig, parseInspect, parseWorktrees, relativePath, summaryLabel } from './collect'
 
 const ROOT = '/work/proj'
 
@@ -70,6 +70,38 @@ test('config: url shorthand, labels, defaults', async () => {
   expect(cfg.containers).toEqual({})
   expect(cfg.docs).toEqual([{ label: 'docs/README.md', path: 'docs/README.md' }])
   expect(() => parseConfig('{"repos": "backend"}')).toThrow()
+})
+
+test('a fresh project: an empty config means the root repo, prompt bar on', async () => {
+  const cfg = parseConfig('{}')
+  expect(cfg).toEqual({ repos: ['.'], promptBar: true, urls: {}, containers: {}, docs: [] })
+  expect(parseConfig('{"repos": [], "promptBar": false}')).toMatchObject({ repos: ['.'], promptBar: false })
+  expect(() => parseConfig('{"promptBar": "no"}')).toThrow()
+  expect(() => parseConfig('[]')).toThrow()
+  expect(relativePath(ROOT, ROOT)).toBe('./')
+})
+
+test('the summary names only what the project has', async () => {
+  const folder = (containers: { name: string; isRunning: boolean }[]) => ({
+    path: 'x/',
+    branch: 'main',
+    urls: [],
+    containers,
+  })
+  const snap = (folders: ReturnType<typeof folder>[]) => ({
+    updatedAt: 0,
+    repos: [{ name: '.', label: 'proj', folders }],
+  })
+
+  expect(summaryLabel(snap([folder([])]))).toBeUndefined()
+  expect(summaryLabel(snap([folder([]), folder([])]))).toBe('1 worktree')
+  expect(summaryLabel(snap([folder([{ name: 'a', isRunning: true }, { name: 'b', isRunning: false }])]))).toBe(
+    'containers 1 of 2 running',
+  )
+  expect(summaryLabel(snap([folder([{ name: 'a', isRunning: true }]), folder([]), folder([])]))).toBe(
+    '2 worktrees · containers 1 of 1 running',
+  )
+  expect(summaryLabel({ updatedAt: 0, repos: [] })).toBeUndefined()
 })
 
 test('folders are shown relative to the project', async () => {

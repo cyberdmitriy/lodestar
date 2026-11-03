@@ -31,19 +31,21 @@ All skills are invoked as `/lodestar:<skill>`.
 
 The marketplace also carries a mod, a separate plugin installed on its own.
 
-### dev-cheatsheet
+### workspace-map
 
 A pane beside the chat with the project's working folders (each repo and its git
 worktrees), the branch checked out in each, the URLs to open, the containers that
 belong to each folder, and a list of docs that open inside the pane. A row above
 the prompt shows a summary, toggles the pane, and names the folder of the agent's
-last edit. `/cheatsheet` opens the pane too.
+last edit. `/workspace` opens the pane too.
 
-It shows only in projects with a `.claude/cheatsheet.json`:
+It shows only in projects with a `.claude/workspace-map.json`; `{}` is enough for a
+single repository at the project root:
 
 ```json
 {
   "repos": ["backend", "frontend"],
+  "promptBar": true,
   "urls": { "web-dev": { "label": "Frontend", "url": "https://localhost" } },
   "containers": { "branch-router": "worktrees/backend-T-1" },
   "docs": [{ "label": "Local setup", "path": "docs/local-setup.md" }]
@@ -51,14 +53,17 @@ It shows only in projects with a `.claude/cheatsheet.json`:
 ```
 
 - `repos`: git repositories, relative to the project root; their worktrees are listed by `git worktree list`.
+  Default: the project root.
+- `promptBar`: the row above the prompt, on by default. `false` hides it and keeps the pane from opening at
+  session start; `/workspace` still opens it.
 - `urls`: a URL per container name, shown on the folder the container belongs to.
 - `containers`: assigns a container to a folder by hand. Otherwise a container goes by its
   `dev.folder` label (`docker run --label dev.folder=<folder>`), then by the folder its bind mounts
   or compose project sit in.
-- `docs`: Markdown files listed on the Docs tab.
+- `docs`: Markdown files listed on the Docs tab; without any, the tab is not shown.
 
 ```
-/plugin install dev-cheatsheet@lodestar-marketplace
+/plugin install workspace-map@lodestar-marketplace
 ```
 
 ## Install

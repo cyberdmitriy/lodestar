@@ -4,9 +4,12 @@ export type DocLink = { label: string; path: string }
 // A URL the config names for one container
 export type UrlEntry = { url: string; label?: string }
 
-// .claude/cheatsheet.json of the project, normalized
+// .claude/workspace-map.json of the project, normalized
 export type Config = {
+  // git repositories relative to the project root; the root itself when the config names none
   repos: string[]
+  // the row above the prompt; off, the pane opens by the command alone
+  promptBar: boolean
   urls: Record<string, UrlEntry>
   containers: Record<string, string>
   docs: DocLink[]
@@ -22,7 +25,13 @@ export type FolderInfo = {
   containers: ContainerInfo[]
 }
 
-export type RepoInfo = { name: string; folders: FolderInfo[]; error?: string }
+export type RepoInfo = {
+  name: string
+  // heading: the repository folder's own name
+  label: string
+  folders: FolderInfo[]
+  error?: string
+}
 
 export type Snapshot = {
   repos: RepoInfo[]
@@ -38,9 +47,9 @@ export type Tab = 'stand' | 'docs' | 'doc'
 // version stored outlives a reload, and a new key leaves it unread.
 declare module 'claude-code' {
   interface PluginState {
-    'dev-cheatsheet': {
-      config1: Config | null
-      snapshot1: Snapshot | null
+    'workspace-map': {
+      config2: Config | null
+      snapshot2: Snapshot | null
       tab: Tab
       expanded1: string[]
       doc2: OpenDoc | null
