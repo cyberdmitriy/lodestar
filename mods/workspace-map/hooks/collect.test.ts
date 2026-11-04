@@ -104,10 +104,10 @@ test('the summary names only what the project has', async () => {
   expect(summaryLabel(snap([folder([])]))).toBeUndefined()
   expect(summaryLabel(snap([folder([]), folder([])]))).toBe('1 worktree')
   expect(summaryLabel(snap([folder([{ name: 'a', isRunning: true }, { name: 'b', isRunning: false }])]))).toBe(
-    'containers 1 of 2 running',
+    '1/2 running',
   )
   expect(summaryLabel(snap([folder([{ name: 'a', isRunning: true }]), folder([]), folder([])]))).toBe(
-    '2 worktrees · containers 1 of 1 running',
+    '2 worktrees · 1/1 running',
   )
   expect(summaryLabel({ updatedAt: 0, repos: [] })).toBeUndefined()
 })

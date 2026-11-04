@@ -196,28 +196,37 @@ export const register: Register = on => {
     const { value: active } = await $.state.get(ACTIVE)
     const summary = (snap && summaryLabel(snap)) ?? TITLE
 
-    // Left: where the agent last edited; right: the summary, which opens the pane
+    // Left: where the agent last edited; right: the summary, which opens the pane.
+    // Names are cut in the middle: a ticket number sits at the end of a folder or branch
     const lastEdit = () => {
       if (!active) return null
       const repo = snap?.repos.find(r => r.folders.some(f => f.path === active))
       const folder = repo?.folders.find(f => f.path === active)
+      const mark = (
+        <Box key="mark" flexShrink={0}>
+          <Text size="footnote" dimColor>
+            ✎
+          </Text>
+        </Box>
+      )
       if (!repo || !folder) {
         return active === './' ? (
-          <Text size="footnote" dimColor wrap="truncate-end">
-            Last edit: project root
-          </Text>
+          <Box flexDirection="row" gap={1} flexShrink={1}>
+            {mark}
+            <Text size="footnote" dimColor wrap="truncate-end">
+              project root
+            </Text>
+          </Box>
         ) : null
       }
       const isMain = repo.folders[0] === folder
       return (
         <Box flexDirection="row" gap={1} flexShrink={1}>
-          <Text size="footnote" dimColor>
-            Last edit:
+          {mark}
+          <Text size="footnote" weight="semibold" wrap="truncate-middle">
+            {barTitle(folder.path)}
           </Text>
-          <Text size="footnote" weight="semibold" wrap="truncate-end">
-            {folderTitle(folder.path)}
-          </Text>
-          <Text size="footnote" color={isMain ? 'warning' : 'suggestion'} wrap="truncate-end">
+          <Text size="footnote" color={isMain ? 'warning' : 'suggestion'} wrap="truncate-middle">
             {folder.branch}
           </Text>
         </Box>
@@ -432,6 +441,11 @@ export const register: Register = on => {
 // A repo named "." lists the project root as its main folder
 function folderTitle(path: string): string {
   return path === './' ? 'project root' : path
+}
+
+// The row above the prompt names a folder by its last segment; the pane shows the path
+function barTitle(path: string): string {
+  return path === './' ? 'project root' : baseName(path)
 }
 
 function firstLine(text: string): string {

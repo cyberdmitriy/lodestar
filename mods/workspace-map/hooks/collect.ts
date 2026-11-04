@@ -85,7 +85,7 @@ export function summaryLabel(snapshot: Snapshot): string | undefined {
   const running = containers.filter(c => c.isRunning).length
   const parts: string[] = []
   if (worktrees > 0) parts.push(`${worktrees} ${worktrees === 1 ? 'worktree' : 'worktrees'}`)
-  if (containers.length > 0) parts.push(`containers ${running} of ${containers.length} running`)
+  if (containers.length > 0) parts.push(`${running}/${containers.length} running`)
   return parts.length > 0 ? parts.join(' · ') : undefined
 }
 
