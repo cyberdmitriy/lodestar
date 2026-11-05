@@ -21,7 +21,7 @@ Your final message: per approved issue — fixed / not fixed (with the reason an
 1. **Establish baseline** — run available project checks (tests, linters, static analysis) BEFORE making any changes. Record pass/fail state. If some checks already fail, note them as pre-existing failures and exclude from regression detection.
 2. Fix the approved issues — only those, nothing else from the report.
 3. **Verify after every fix batch** — re-run the same project checks after each logical group of fixes. Do not batch all fixes and check once at the end.
-4. **If new failures appear** (not in the baseline): stop immediately. Do not continue with remaining fixes. Revert the fix that caused the regression, and return: which fix caused it, what failed, what is left undone. You cannot ask the user — the orchestrator does.
+4. **If new failures appear** (not in the baseline): stop immediately. Do not continue with remaining fixes. Revert the fix that caused the regression by editing your own change back; keep the original text of each hunk before you change it. Never use `git checkout`, `git restore`, `git reset`, `git stash` or `git clean`: the files may hold the user's uncommitted work. Then return: which fix caused it, what failed, what is left undone. You cannot ask the user — the orchestrator does.
 5. **If checks match baseline:** continue to the next batch.
 6. Report what was fixed and final verification results.
 

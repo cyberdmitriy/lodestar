@@ -28,8 +28,8 @@ Parse `$ARGUMENTS` to determine which files to check and which rules to apply:
 - If output is empty (clean tree): scan all custom source code against all rules (report as "full codebase")
 - To find source directories, look at the project structure: check for `src/`, `app/`, `lib/`, `tests/`, `resources/`, and any directories referenced in the loaded rule files. Exclude `vendor/`, `node_modules/`, `storage/`, `bootstrap/cache/`, `.git/`, and other dependency/build directories.
 
-**File path argument** (e.g., `app/Services/Api/PythonApiService.php`):
-- Check only that file against all rules
+**File path arguments** (one or more, e.g., `app/Services/Api/PythonApiService.php app/Models/Order.php`):
+- Check only those files against all rules
 
 **Rule name argument** (e.g., `laravel-service-design`):
 - Match against `.claude/rules/{name}.md`

@@ -6,9 +6,11 @@ You are the review subagent started by `/lodestar:code-review`. You run in an is
 
 Your prompt gives you a scope block:
 
+- **Depth** — `deep`
 - **Mode** — uncommitted / branch vs `<base>` / full codebase / layer / path
-- **Base** — the base ref for branch mode (e.g. `origin/develop`); the diff is `git diff <base>...HEAD` plus `git diff HEAD` for uncommitted work
-- **Files** — the resolved file list
+- **Base** — the base ref for branch mode (e.g. `origin/develop`); the diff is `git diff <base>...HEAD` plus `git diff HEAD` for uncommitted work, plus untracked files (`git ls-files --others --exclude-standard -- <files>`), read in full
+- **Files** — the resolved file list, generated files left out
+- **Generated** — files in scope that are generated (lock files, schema dumps, snapshots, build output). See **Generated files** below
 - **Layers** — detected layers, or the single layer in scope
 
 Before starting, read every file in `.claude/rules/` (if the directory exists) — those are the project rules `/lodestar:check-rules` will enforce, and knowing them keeps Phase 1 from duplicating them.
@@ -28,6 +30,10 @@ even if those were not changed in this session. Do not limit the analysis to the
 
 **Confidence rule:** Only report issues with confidence >= 80 (on a 0-100 scale). When in doubt, verify before reporting. Quality over quantity — false positives waste more time than missed nitpicks.
 
+**Generated files:** never read the files under **Generated** in full — not yourself, not in Stage 1A, and not in any agent you start in Phase 1 or Phase 2; give agents the diff or file list without them. When their change matters (a schema dump next to a schema source change, a lock file next to a manifest change), check it with a command and cap the output: `git diff <ref> -- <file> | grep -E '^[+-]' | grep -vE '^(\+\+\+|---) ' | head -100`, with the ref of the mode's diff. Compare the changed names with the source change. A mismatch is a finding at the generated file's path, source tag `Generated`. A static-analysis baseline (`phpstan-baseline.neon`, `psalm-baseline.xml`) that gains entries hides new errors: list the added entries with the same command, and report each one the diff does not justify.
+
+**Time:** record the start time with `date +%s` before Phase 1 and the end time before writing the Unified Report.
+
 ---
 
 # Phase 1 — Deep Analysis
@@ -41,10 +47,9 @@ the code was written this way. Analyze the code as if seeing it for the first ti
 Before spawning analysis agents, run a single dependency mapping agent:
 
 Spawn one agent with Read, Grep, Glob, Bash tools that:
-1. Reads every file in the resolved scope
-2. For each file, identifies all classes, services, methods, and modules it interacts with
-3. Reads those interaction targets as well
-4. Builds a dependency map:
+1. For each file in the resolved scope, generated files excluded, lists its dependencies from its import / `use` / `require` lines and `::class` / `new` references with grep; reads a file only when those lines do not show what it calls.
+2. Records the paths of those targets without reading them.
+3. Builds a dependency map:
    {
      "file": "app/Actions/Payment/ProcessAction.php",
      "interacts_with": [
@@ -52,9 +57,9 @@ Spawn one agent with Read, Grep, Glob, Bash tools that:
        "app/Models/Order.php"
      ]
    }
-5. Groups files by shared dependencies — files that interact with the same classes
+4. Groups files by shared dependencies — files that interact with the same classes
    should be in the same group to give the analysis agent full context
-6. Returns: list of groups, where each group contains the paths of the primary file(s)
+5. Returns: list of groups, where each group contains the paths of the primary file(s)
    and all their interaction targets (paths only, no file contents)
 
 Announce completion:
@@ -269,23 +274,27 @@ Each agent applies the **confidence >= 80** threshold. Findings are collected as
 
 ## Step 3 — Project Rules Check
 
-Invoke `/lodestar:check-rules --report-only` with the arguments for the mode (see **Scoping the sibling skills** below). This reads all `.claude/rules/*.md` dynamically, checks every file in scope against them, runs available automated checks (linters, static analysis, tests), and reports violations. The `--report-only` flag ensures no fixes are offered — only findings are collected.
+Invoke `/lodestar:check-rules --report-only` with the arguments for the mode (see **Scoping the sibling skills** below). This reads all `.claude/rules/*.md` dynamically, checks every file in scope against them, and reports violations. The `--report-only` flag ensures no fixes are offered — only findings are collected.
 
 **This step covers ALL convention and pattern checks** — architecture, naming, framework usage, performance patterns, API contracts, etc.
 
+## Step 4 — Project checks
+
+Run the project's linters and static analysis read-only (no `--fix`, no formatter that writes), using the scripts or Makefile targets the project defines. Keep only failures in files in scope; report each as an issue with source tag `Checks`. Do not run the test suite: the fix step runs it as a baseline.
+
 ## Scoping the sibling skills
 
-Neither sibling takes a file list or a base ref. `/lodestar:check-rules` accepts one file path, one rule name, or `--all`; with no path it checks only `git diff --name-only HEAD` (uncommitted work), which misses committed branch changes. `/lodestar:error-handling-audit` accepts one `--path` and `--stack`. Call them per mode:
+Neither sibling takes a base ref. `/lodestar:check-rules` accepts one or more file paths, one rule name, or `--all`; with no path it checks only `git diff --name-only HEAD` (uncommitted work), which misses committed branch changes. `/lodestar:error-handling-audit` accepts one `--path` and `--stack`. Call them per mode:
 
 | Mode | `/lodestar:error-handling-audit` | `/lodestar:check-rules` |
 |---|---|---|
-| uncommitted, branch, path | `--report-only --path <dir>`, once per distinct directory that holds files in scope | `--report-only <file>`, once per file in scope |
+| uncommitted, branch, path | `--report-only --path <dir>`, once per distinct directory that holds files in scope | `--report-only <file> <file> …`, one call with every file in scope |
 | full codebase | `--report-only` (no `--path`) | `--report-only --all` |
 | layer | `--report-only --stack <layer>` when the layer is `python`, `laravel` or `react`; otherwise `--report-only --path <layer dir>` | `--report-only --all` |
 
 Never call `/lodestar:check-rules` without a path or `--all` in branch mode. After each call, keep only findings in files from the scope's file list.
 
-**Steps 1, 2, and 3 can run in parallel** — they are report-only at this stage.
+**Steps 1, 2, 3, and 4 can run in parallel** — they are report-only at this stage.
 
 ---
 
@@ -314,6 +323,7 @@ Code Review Complete
 ========================
 
 Scope: X files | Mode: [uncommitted / branch vs <base> / full codebase / layer / path] | Layers: [all / specific]
+Depth: deep | Time: N min | Generated, not read: G
 ```
 
 ### Summary (phase-by-phase counts)
@@ -324,6 +334,7 @@ Scope: X files | Mode: [uncommitted / branch vs <base> / full codebase / layer /
 | Error Handling Audit | — | — | — | — |
 | Code Simplification | — | — | — | — |
 | Project Rules Check | — | — | — | — |
+| Project Checks | — | — | — | — |
 | **After dedup & conflicts** | **—** | **—** | **—** | **—** |
 
 ### File Heat Map (one row per file in scope)
@@ -334,7 +345,7 @@ Scope: X files | Mode: [uncommitted / branch vs <base> / full codebase / layer /
 | `resources/js/Pages/Chat.tsx` | 0 | 1 | 1 | P1-UI, Reuse |
 | `app/Services/ChatService.php` | 0 | 0 | 0 | ✓ Clean |
 
-List every file in scope — clean files get a "✓ Clean" source tag. Sort by severity descending (most critical files first).
+List every file in scope — clean files get a "✓ Clean" source tag, generated files without findings get "Generated". Sort by severity descending (most critical files first).
 
 ### Issues by Severity
 
@@ -358,7 +369,7 @@ Number issues sequentially across all severity groups (1, 2, 3…). The orchestr
 |---|---|---|---|---|---|
 | 3 | `Pages/Chat.tsx`:120 | Inline style could use cn() | 85 | Reuse | Extract to utility |
 
-Source tags: `P1-Quality`, `P1-Behavior`, `P1-Logic`, `P1-Security`, `P1-UI`, `P1-Testing`, `P1-Spec`, `ErrAudit`, `Reuse`, `Simplify-Quality`, `Efficiency`, `Rules`.
+Source tags: `P1-Quality`, `P1-Behavior`, `P1-Logic`, `P1-Security`, `P1-UI`, `P1-Testing`, `P1-Spec`, `ErrAudit`, `Reuse`, `Simplify-Quality`, `Efficiency`, `Rules`, `Checks`, `Generated`.
 
 ### Verdict
 

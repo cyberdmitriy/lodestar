@@ -10,7 +10,7 @@ All skills are invoked as `/lodestar:<skill>`.
 | Skill | Invoke | Purpose |
 |-------|--------|---------|
 | workflow | `/lodestar:workflow` | Phased plan-then-build discipline for non-trivial changes |
-| code-review | `/lodestar:code-review` | Deep code review: behavior, logic, security, UI, spec, plus automated checks |
+| code-review | `/lodestar:code-review` | Code review: a fast one-pass review for small diffs, or a deep one (behavior, logic, security, UI, spec, plus automated checks) |
 | review-mr | `/lodestar:review-mr` | Independent MR/PR (or branch) review: behavior-diff, spec parity, test-quality; posts inline comments after confirmation |
 | init-rules | `/lodestar:init-rules` | Generate project coding-standard rules at `.claude/rules/` |
 | audit-rules | `/lodestar:audit-rules` | Audit existing `.claude/rules/` for clarity and integrity |
