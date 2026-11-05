@@ -146,7 +146,7 @@ Number issues sequentially across all severity groups (1, 2, 3…). The orchestr
 
 | # | File:Line | Issue | Confidence | Source | Fix |
 |---|---|---|---|---|---|
-| 2 | `app/Http/Controllers/...`:31 | Endpoint has no ownership check | 90 | Security | Authorize via the order policy |
+| 2 | `app/Http/Controllers/...`:31 | Endpoint has no ownership check | 90 | Security | A: authorize via the order policy; B: scope the query to the current customer |
 
 **Minor (note for later)**
 
@@ -155,6 +155,32 @@ Number issues sequentially across all severity groups (1, 2, 3…). The orchestr
 | 3 | `app/Services/...`:77 | Response key is snake_case, rule requires camelCase | 85 | Rules | Rename to `orderId` |
 
 Source tags: `Logic`, `Security`, `Spec`, `Rules`, `Testing`, `Docs`, `Efficiency`, `Generated`.
+
+When two or more fixes are reasonable and the choice is the user's, give 2–4 options in the Fix column (`A: …; B: …`), the one you recommend first, and list the issue under **Decisions needed**.
+
+### Recommended fixes
+
+Every issue appears here exactly once:
+
+| # | Do | Reason |
+|---|---|---|
+| 1 | Fix now | Exploitable from the order form; one-line fix |
+| 2 | Fix now | Any customer can read another customer's order |
+| 3 | Later | Renaming the key breaks the mobile app; needs its own task |
+
+- **Fix now** — a real effect on this change, and a fix that stays within it.
+- **Later** — real, but outside this change's purpose, or the fix changes behavior that a separate task should own (check the project's rules on out-of-task changes).
+- **Skip** — the cost outweighs the effect, or something else already covers it (a test, static analysis, a guard elsewhere). Name what covers it.
+
+### Decisions needed
+
+Only issues whose Fix column offers options:
+
+| # | Question | Options |
+|---|---|---|
+| 2 | Where to enforce order ownership | A: the order policy (recommended); B: a scoped query in the controller |
+
+Omit this section when no issue offers options.
 
 ### Verdict
 

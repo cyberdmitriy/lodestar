@@ -169,23 +169,31 @@ Scope:
 
 The subagent's report is not shown to the user automatically. Print it **in full, verbatim** — every table, every issue number.
 
-If it found no Critical, Important, or Minor issues, stop here.
+If it found no issues at all, outside the diff included, stop here.
 
 ## Step 9 — Ask which issues to fix
 
-> **Found X issues (Y Critical, Z Important, W Minor).**
+> **Found X issues (Y Critical, Z Important, W Minor), plus N outside the diff.**
 
-Ask with **AskUserQuestion**, header `Fix`:
+Leave out the second part when N is 0. Build the options from the report's **Recommended fixes** table and ask with **AskUserQuestion**, header `Fix`:
 
 | Option label | Description |
 |---|---|
-| `Critical + Important (Recommended)` | Fix every Critical and Important issue |
-| `Everything` | Also fix the Minor issues |
+| `Fix now (Recommended)` | Issues <numbers>: the ones the review marked Fix now |
+| `Critical + Important` | Every Critical and Important issue |
+| `Everything` | Every issue in Issues by Severity. `O` issues (outside the diff) are never included |
 | `Report only` | Fix nothing, stop here |
 
-End the question text with: *"Or type issue numbers in Other, e.g. `1, 3, 5`."* No Critical or Important issues → drop the first option and recommend `Report only`. If AskUserQuestion is not available, print the choices and wait.
+- Nothing marked Fix now → drop the first option and recommend `Critical + Important`; with no Critical or Important issues either, drop that one too and recommend `Report only`.
+- The Fix-now set equals the Critical + Important set → drop `Critical + Important`.
+- End the question text with: *"Or type issue numbers in Other, with a note per issue if you want, e.g. `1, 3, O2, 5: backlog only`."*
+- If AskUserQuestion is not available, print the choices and wait.
 
 `Report only` → stop.
+
+**Choices between fixes.** For every approved issue listed in the report's **Decisions needed**, ask with AskUserQuestion: one question per issue, up to 4 per call, header `#<number>`, the report's options as option labels with the recommended one first and `(Recommended)` in its label. Skip an issue whose note from the user already picks an option.
+
+**User decisions.** Collect, per approved issue: the option picked, and any note the user gave about it — in Other, or in a message — in the user's own words. They go to the fix subagent in Step 10.
 
 ## Step 10 — Run the fixes in a subagent
 
@@ -196,6 +204,9 @@ Read <absolute path>/references/fix.md and follow it exactly.
 
 Approved issues: <numbers>
 
+User decisions:
+<one line per issue: "#<number>: <the option picked, or the user's note in their words>", or "none">
+
 Scope:
 - Mode: <mode>
 - Base: <base ref, or "n/a">
@@ -205,4 +216,4 @@ Review report:
 <the full report from Step 7, verbatim>
 ```
 
-Relay its result to the user in full. If it stopped on a regression, show what failed and ask with AskUserQuestion how to proceed (skip that issue and continue with the rest / stop here). To continue, start a new fix subagent with the remaining numbers.
+Relay its result to the user in full. If it stopped on a regression, show what failed and ask with AskUserQuestion how to proceed (skip that issue and continue with the rest / stop here). To continue, start a new fix subagent with the remaining numbers and their User decisions.

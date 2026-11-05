@@ -30,7 +30,7 @@ even if those were not changed in this session. Do not limit the analysis to the
 
 **Confidence rule:** Only report issues with confidence >= 80 (on a 0-100 scale). When in doubt, verify before reporting. Quality over quantity — false positives waste more time than missed nitpicks.
 
-**Generated files:** never read the files under **Generated** in full — not yourself, not in Stage 1A, and not in any agent you start in Phase 1 or Phase 2; give agents the diff or file list without them. When their change matters (a schema dump next to a schema source change, a lock file next to a manifest change), check it with a command and cap the output: `git diff <ref> -- <file> | grep -E '^[+-]' | grep -vE '^(\+\+\+|---) ' | head -100`, with the ref of the mode's diff. Compare the changed names with the source change. A mismatch is a finding at the generated file's path, source tag `Generated`. A static-analysis baseline (`phpstan-baseline.neon`, `psalm-baseline.xml`) that gains entries hides new errors: list the added entries with the same command, and report each one the diff does not justify.
+**Generated files:** never read the files under **Generated** in full — not yourself, not in Stage 1A, and not in any agent you start in Phase 1 or Phase 2; give agents the diff or file list without them. When their change matters (a schema dump next to a schema source change, a lock file next to a manifest change), check it with a command and cap the output: `git diff <ref> -- <file> | grep -E '^[+-]' | grep -vE '^(\+\+\+|---) ' | head -100`. The ref is the merge-base in branch mode (`git merge-base <base> HEAD`) and `HEAD` in uncommitted mode; both compare to the working tree. Never use `<base>` itself: changes that landed on the base after the branch was cut would show up reversed. Full codebase, layer and path modes have no diff: skip this check. Compare the changed names with the source change. A mismatch is a finding at the generated file's path, source tag `Generated`. A static-analysis baseline (`phpstan-baseline.neon`, `psalm-baseline.xml`) that gains entries hides new errors: list the added entries with the same command, and report each one the diff does not justify.
 
 **Time:** record the start time with `date +%s` before Phase 1 and the end time before writing the Unified Report.
 
@@ -336,6 +336,9 @@ Depth: deep | Time: N min | Generated, not read: G
 | Project Rules Check | — | — | — | — |
 | Project Checks | — | — | — | — |
 | **After dedup & conflicts** | **—** | **—** | **—** | **—** |
+| Outside the diff | — | — | — | — |
+
+The bold row counts Issues by Severity only; the last row counts the **Outside the diff** table.
 
 ### File Heat Map (one row per file in scope)
 
@@ -345,7 +348,7 @@ Depth: deep | Time: N min | Generated, not read: G
 | `resources/js/Pages/Chat.tsx` | 0 | 1 | 1 | P1-UI, Reuse |
 | `app/Services/ChatService.php` | 0 | 0 | 0 | ✓ Clean |
 
-List every file in scope — clean files get a "✓ Clean" source tag, generated files without findings get "Generated". Sort by severity descending (most critical files first).
+List every file in scope — clean files get a "✓ Clean" source tag, generated files without findings get "Generated". Sort by severity descending (most critical files first). Count only Issues by Severity, not **Outside the diff**.
 
 ### Issues by Severity
 
@@ -361,7 +364,7 @@ Number issues sequentially across all severity groups (1, 2, 3…). The orchestr
 
 | # | File:Line | Issue | Confidence | Source | Fix |
 |---|---|---|---|---|---|
-| 2 | `Pages/Chat.tsx`:88 | Missing error state for 409 | 90 | P1-UI | Add conflict response handler |
+| 2 | `Pages/Chat.tsx`:88 | Missing error state for 409 | 90 | P1-UI | A: show a conflict message and reload; B: retry the send once |
 
 **Minor (note for later)**
 
@@ -370,6 +373,43 @@ Number issues sequentially across all severity groups (1, 2, 3…). The orchestr
 | 3 | `Pages/Chat.tsx`:120 | Inline style could use cn() | 85 | Reuse | Extract to utility |
 
 Source tags: `P1-Quality`, `P1-Behavior`, `P1-Logic`, `P1-Security`, `P1-UI`, `P1-Testing`, `P1-Spec`, `ErrAudit`, `Reuse`, `Simplify-Quality`, `Efficiency`, `Rules`, `Checks`, `Generated`.
+
+When two or more fixes are reasonable and the choice is the user's, give 2–4 options in the Fix column (`A: …; B: …`), the one you recommend first, and list the issue under **Decisions needed**.
+
+### Outside the diff (uncommitted and branch mode only)
+
+Issues in code the diff does not change go here, not in Issues by Severity: pre-existing problems that Phase 1 or Phase 2 found in files in scope or in their interaction targets. An issue the diff causes, makes worse or makes newly reachable is not outside the diff — it belongs in Issues by Severity.
+
+| # | Severity | File:Line | Issue | Confidence | Source | Fix |
+|---|---|---|---|---|---|---|
+| O1 | Minor | `app/Http/Controllers/...`:57 | Pre-existing: unhandled 429 from the provider | 85 | ErrAudit | Retry with backoff |
+
+Number them `O1`, `O2`… so they never mix with the issue numbers. Omit this section in full codebase, layer and path mode, and when it is empty.
+
+### Recommended fixes
+
+Every issue appears here exactly once, `O` numbers included:
+
+| # | Do | Reason |
+|---|---|---|
+| 1 | Fix now | Exploitable from the chat form; one-line fix |
+| 2 | Fix now | Users get a stuck spinner on every edit conflict |
+| 3 | Skip | Style only, no effect |
+| O1 | Later | Changes how the integration retries; belongs in its own task |
+
+- **Fix now** — a real effect on this change, and a fix that stays within it.
+- **Later** — real, but outside this change's purpose, or the fix changes behavior that a separate task should own (check the project's rules on out-of-task changes).
+- **Skip** — the cost outweighs the effect, or something else already covers it (a test, static analysis, a guard elsewhere). Name what covers it.
+
+### Decisions needed
+
+Only issues whose Fix column offers options:
+
+| # | Question | Options |
+|---|---|---|
+| 2 | What the user sees on an edit conflict | A: a conflict message and reload (recommended); B: one silent retry |
+
+Omit this section when no issue offers options.
 
 ### Verdict
 

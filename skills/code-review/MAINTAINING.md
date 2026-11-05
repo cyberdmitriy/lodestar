@@ -19,7 +19,9 @@ Review checklists go in `references/review.md` and `references/review-fast.md`, 
 - **deep** (`references/review.md`) is the full review, for large diffs and before a merge request.
 - The orchestrator picks the depth in `SKILL.md` Step 6 from metadata only: `git diff --numstat` against the thresholds (15 files not counting tests and Markdown, 500 added lines) and risk signals in file paths. It never reads the diff — that would pull the code into the main conversation, where the session's reasoning colors the judgment.
 - Generated-file detection lives in `SKILL.md` Step 5 and serves both depths: the orchestrator passes the list, and neither review reads those files in full.
-- Both reports keep the same numbered Issues tables (`#`, `File:Line`, `Issue`, `Confidence`, `Source`, `Fix`), because `references/fix.md` reads either one. Change the columns in both files or in neither.
+- Both reports keep the same numbered Issues tables (`#`, `File:Line`, `Issue`, `Confidence`, `Source`, `Fix`), because `references/fix.md` reads either one, and the same **Recommended fixes** and **Decisions needed** sections, because `SKILL.md` Step 9 builds the Fix question from them. Change these in both files or in neither.
+- Issues in code the diff does not change stay out of the fix options: deep lists them as `O1`, `O2`… under **Outside the diff**, fast only counts them. The user can still pick one by typing its number.
+- What the user decides about a fix (an option, a note like "backlog only") reaches the fix subagent only through the `User decisions` block in Step 10. Never leave it to the conversation: the subagent does not see it.
 - The fast checklist is a short subset of the deep one. When you change a correctness or security check in `references/review.md`, check whether `references/review-fast.md` has the same item and update it too.
 
 ## What belongs in `references/review.md` (deep analysis requiring reasoning)

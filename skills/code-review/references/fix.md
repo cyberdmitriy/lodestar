@@ -8,6 +8,7 @@ Your prompt gives you:
 
 - The full **Unified Report** from the review run
 - The **approved issue numbers** — fix those and only those
+- **User decisions** — per issue, the fix option the user picked or a note in their words. A decision overrides the report's Fix column for that issue. If you cannot follow one, leave that issue unfixed and say why. An issue whose Fix column offers options and has no decision gets the first option
 - The scope block (mode, base, files)
 
 ## Output
