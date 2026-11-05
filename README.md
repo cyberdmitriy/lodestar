@@ -39,7 +39,8 @@ The marketplace also carries a mod, a separate plugin installed on its own.
 
 A pane beside the chat with the project's working folders (each repo and its git
 worktrees), the branch checked out in each, the URLs to open, the containers that
-belong to each folder, and a list of docs that open in the app's file viewer. A row above
+belong to each folder, and a list of docs: Markdown opens in the app's file viewer, any other
+file in the app macOS assigns to it. A row above
 the prompt shows a summary, toggles the pane, and names the folder of the agent's
 last edit. `/workspace` opens the pane too; it never opens by itself.
 
@@ -52,7 +53,10 @@ single repository at the project root:
   "promptBar": true,
   "urls": { "web-dev": { "label": "Frontend", "url": "https://localhost" } },
   "containers": { "branch-router": "worktrees/backend-T-1" },
-  "docs": [{ "label": "Local setup", "path": "docs/local-setup.md" }]
+  "docs": [
+    { "label": "Local setup", "path": "docs/local-setup.md" },
+    { "label": "Prototype", "path": "../specs/prototype/index.html" }
+  ]
 }
 ```
 
@@ -63,8 +67,10 @@ single repository at the project root:
 - `containers`: assigns a container to a folder by hand. Otherwise a container goes by its
   `dev.folder` label (`docker run --label dev.folder=<folder>`), then by the folder its bind mounts
   or compose project sit in.
-- `docs`: files listed as links on the Docs tab; a click opens the file in the app's own file viewer.
-  Without any, the tab is not shown.
+- `docs`: files listed on the Docs tab, relative to the project root or absolute. A `.md` file is a link
+  that opens in the app's own file viewer, which shows only files inside the session's folders. Any
+  other file (an HTML prototype, a PDF) is a `↗` button that hands it to macOS `open`, so it opens in
+  its default app, an HTML page in the browser, from any folder. Without any docs, the tab is not shown.
 
 ```
 /plugin install workspace-map@lodestar-marketplace

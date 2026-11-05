@@ -101,6 +101,12 @@ export function docLinks(root: string, docs: DocLink[]): string {
     .join('\n')
 }
 
+// Markdown opens in the app's file viewer, which is for reading and opens only files inside the
+// session's folders; anything else (an HTML prototype, a PDF) opens in the app macOS assigns to it
+export function opensInViewer(path: string): boolean {
+  return /\.(md|markdown)$/i.test(path)
+}
+
 export function baseName(path: string): string {
   return path.split('/').filter(Boolean).pop() ?? path
 }

@@ -5,6 +5,7 @@ import {
   attribute,
   baseName,
   docLinks,
+  opensInViewer,
   parseConfig,
   parseInspect,
   parseWorktrees,
@@ -405,8 +406,28 @@ export const register: Register = on => {
     }
 
     // A Link element draws a file: URL as plain text on desktop, but a link in Markdown opens
-    // the file in the app's own viewer
-    const docsTab = () => (cfg && hasDocs ? <Markdown text={docLinks(root, cfg.docs)} /> : null)
+    // the file in the app's own viewer. Other files are Buttons that hand the file to macOS
+    const docsTab = () => {
+      if (!cfg || !hasDocs) return null
+      const inViewer = cfg.docs.filter(d => opensInViewer(d.path))
+      const outside = cfg.docs.filter(d => !opensInViewer(d.path))
+      return (
+        <Box flexDirection="column" gap={1}>
+          {inViewer.length > 0 ? <Markdown text={docLinks(root, inViewer)} /> : null}
+          {outside.map(d => (
+            <Button
+              key={`open:${d.path}`}
+              label={`${d.label} ↗`}
+              plain
+              onPress={async () => {
+                const opened = await run($, ['open', resolvePath(root, d.path)])
+                if (!opened.ok) $.ui.toast(`${d.label}: ${opened.error}`)
+              }}
+            />
+          ))}
+        </Box>
+      )
+    }
 
     const root = await $.session.root()
 

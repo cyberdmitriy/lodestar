@@ -3,6 +3,7 @@ import { expect, test } from 'claude-code/testing'
 import {
   attribute,
   docLinks,
+  opensInViewer,
   parseConfig,
   parseInspect,
   parseWorktrees,
@@ -129,4 +130,12 @@ test('docs become file links the app viewer opens', async () => {
       '- [Notes \\[old\\]](file:///work/proj/docs/my%20notes%20%28v2%29.md)',
     ].join('\n'),
   )
+})
+
+test('only markdown opens in the app viewer, other files open outside', async () => {
+  expect(opensInViewer('docs/local-setup.md')).toBe(true)
+  expect(opensInViewer('docs/README.MARKDOWN')).toBe(true)
+  expect(opensInViewer('../specs/prototype/demo.html')).toBe(false)
+  expect(opensInViewer('docs/plan.pdf')).toBe(false)
+  expect(opensInViewer('docs/md')).toBe(false)
 })

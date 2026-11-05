@@ -1,6 +1,6 @@
 {
   "name": "workspace-map",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Pane with the project's working folders, their branches, URLs and containers, plus doc links, read from .claude/workspace-map.json",
   "author": { "name": "Dmitry Antonenko" },
   "types": "./types/index.d.ts"
