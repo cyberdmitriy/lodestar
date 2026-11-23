@@ -1,6 +1,6 @@
 ---
 name: clickup-comments
-description: Use when about to post or draft a comment on a ClickUp task/ticket — replying to a question, giving a status update, or reporting what shipped. Ensures the comment is written in first person as Dmitry, short and in plain English that stays concrete (names services, environments and releases, says where a result can be checked, no code), polished with the humanizer skill, shown as a draft first, and posted only after Dmitry's explicit OK.
+description: Use when about to post or draft a comment on a ClickUp task/ticket — replying to a question, giving a status update, or reporting what shipped. Ensures the comment is written in first person as Dmitry, short and in plain English that stays concrete (names services, environments and releases, says where a result can be checked, no code), @mentions the person it addresses, links every ticket it names, refers only to what the reader can see and does not restate what the ticket asked for, polished with the humanizer skill, shown as a draft first, and posted only after Dmitry's explicit OK.
 ---
 
 # ClickUp Comments
@@ -29,13 +29,30 @@ How to draft and post comments on ClickUp tickets.
 - **"Done" says where the reader can check it.** A PM checks a result in an
   environment, not in git. Say where the change can be seen: production,
   staging, a dev instance, and the page when that helps ("I've deployed it
-  to the LMS dev instance"). A branch, commit or merge request goes in only when the
-  reader works with it, e.g. a merge request they review. Check that the
-  change is really there before writing it. Built but not deployed anywhere
-  yet: say so instead of "done". Never cite an ID the reader cannot find
-  (another person's question numbers, internal decision IDs).
+  to the LMS dev instance"). A branch, commit or merge request goes in only
+  when the reader works with it, e.g. a merge request they review. Check that
+  the change is really there before writing it. Built but not deployed
+  anywhere yet: say so instead of "done".
+- **Refer only to what the reader knows and can open.** Every question, ID,
+  document or text the comment points to must be one the reader has seen or
+  can open: the ticket, the spec, a page, a thread they were in. Our internal
+  notes, code and code comments, commit messages, another person's own
+  question numbers and internal decision IDs are invisible to them. Leave
+  such a reference out; if the point matters, say it in plain words.
 - **Always write in English**, regardless of the ticket's language.
-- **Greet with "Hey <name>,"** — not "Hi", "Hello", or "Dear".
+- **Greet with "Hey <name>,"** — not "Hi", "Hello", or "Dear". The name is an
+  @mention (rule below).
+- **@mention a person the first time you name them.** The first time the
+  comment names a specific person, the greeting included, write the name as a
+  mention: `[@Anna](#user_mention#81344)`, with their numeric ClickUp user
+  id. A plain "@Anna" stays text and notifies no one. Later mentions
+  of the same person are plain names. Take the id from the `user.id` of
+  their comment in the thread, or look it up with
+  `mcp__clickup__clickup_find_member_by_name`.
+- **Every ticket you name is a link to it**, with the ticket ID as the text:
+  `[PROJ-123](https://app.clickup.com/t/<workspace id>/PROJ-123)`. The URL is
+  `https://app.clickup.com/t/<workspace id>/<custom id>`, or the `url` that
+  `mcp__clickup__clickup_get_task` returns.
 - **Neutral tone, never deferential.** Avoid eager/servile filler like
   "Happy to…", "Feel free to…", "Let me know if…". State things plainly.
 - **Clear referents only.** Never mention a person or group the reader can't
@@ -46,9 +63,10 @@ How to draft and post comments on ClickUp tickets.
 - **Never promise a future deploy.** No "goes out with the next deployment",
   "will be live after the deploy", or any variant. By the time the comment is
   read the change is normally already running, so the sentence is both wrong
-  and noise. Already deployed: say where it is deployed (rule above). Not deployed
-  yet: say it is not visible anywhere yet, with no date. Deploy manual or
-  gated: name what is required and who does it, never a vague future tense.
+  and noise. Already deployed: say where it is deployed (rule above). Not
+  deployed yet: say it is not visible anywhere yet, with no date. Deploy
+  manual or gated: name what is required and who does it, never a vague
+  future tense.
 
 ## Structure
 
@@ -60,6 +78,11 @@ How to draft and post comments on ClickUp tickets.
   ticket or earlier comments. Add a question, decision or proposal only when
   the task needs it to be finished or to move forward; side findings and
   "nice to have" ideas go to the report or a separate ticket, not here.
+- **Don't repeat what was asked for.** The ticket or the reader's comment
+  already says what was required. A report on it says that it is done and
+  where it can be checked, then only what differs from the request, what is
+  still missing, and what the reader has to decide. Listing the requirements
+  back ("it now works like this: 1, 2, 3") only duplicates the ticket.
 - **Make asks explicit.** When the task does need an answer or a decision,
   state exactly what is needed and from whom.
 - **End with the next step** when there is one — but never a deploy promise
@@ -80,13 +103,15 @@ Example, a status report with a question:
 > regions in the list? If not, it stays as it is.
 
 ✅ Concrete
-> Hey Anna,
+> Hey [@Anna](#user_mention#81344),
 >
-> Done:
-> - The export runs every night.
-> - Customer form: new required field Region. Switched-off regions can't be picked.
+> Done, I've deployed it to staging.
 >
 > Regions: the list has 12, the five from the spec plus 7 I added. Does the client want others? Otherwise the list stays.
+
+The nightly export and the field Region are what the ticket asked for, so the
+report does not list them again; the extra regions differ from the spec, so
+they stay.
 
 ## Procedure (never skip a step)
 
@@ -95,8 +120,9 @@ Example, a status report with a question:
    `mcp__clickup__clickup_get_threaded_comments` when a comment has replies).
    The recipient is whoever the comment is for — the person who asked the
    question, the last commenter in the thread, or the assignee. Address them
-   by name in the comment. If the recipient is unclear, write with no
-   name-address — a general comment aimed at the PM.
+   by name in the comment, as an @mention: note their numeric user id. If the
+   recipient is unclear, write with no name-address — a general comment
+   aimed at the PM.
 2. **Draft** the comment per the Voice rules above.
 3. **Polish** the draft with the `humanizer` skill to strip AI-writing tells.
 4. **Show the draft to Dmitry.** Do NOT post yet.
@@ -108,4 +134,6 @@ Example, a status report with a question:
    one fails with `entity_id is required for top-level comments`. Use the
    real ClickUp task id (e.g. `86ey4xzgy`), not the custom id (`FRAUN-118`);
    resolve it first with `mcp__clickup__clickup_get_task` if you only have
-   the custom id. Use `reply_to_id` when replying inside an existing thread.
+   the custom id. Use `reply_to_id` when replying inside an existing thread;
+   if the space has threaded replies switched off ("Threaded comments
+   ClickApp must be enabled"), post the same text as a top-level comment.
