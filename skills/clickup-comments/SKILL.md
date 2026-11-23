@@ -1,6 +1,6 @@
 ---
 name: clickup-comments
-description: Use when about to post or draft a comment on a ClickUp task/ticket — replying to a question, giving a status update, or reporting what shipped. Ensures the comment is written in first person as Dmitry, short and in plain English that stays concrete (names services, branches and releases, no code), polished with the humanizer skill, shown as a draft first, and posted only after Dmitry's explicit OK.
+description: Use when about to post or draft a comment on a ClickUp task/ticket — replying to a question, giving a status update, or reporting what shipped. Ensures the comment is written in first person as Dmitry, short and in plain English that stays concrete (names services, environments and releases, says where a result can be checked, no code), polished with the humanizer skill, shown as a draft first, and posted only after Dmitry's explicit OK.
 ---
 
 # ClickUp Comments
@@ -19,13 +19,21 @@ How to draft and post comments on ClickUp tickets.
   changed and what it means*, not *how it was implemented*. The reader is a
   PM/stakeholder, not an engineer.
 - **Concrete, not abstract.** Name the things the reader can act on or ask
-  about: services, systems, branches, releases, screens, fields as users see
-  them ("the community service", "release 1.38", "the production branch").
+  about: services, systems, environments, releases, screens, fields as users
+  see them ("the community service", "release 1.38", "the LMS dev instance").
   Leave out what only a developer reading the code needs: file paths, class
-  and method names, enum values, run IDs. Test: could the reader pass this
-  name to someone else and get an answer? If yes, keep it. A vague stand-in
-  ("the same service", "a separate branch", "the relevant system") is worse
+  and method names, enum values, run IDs, branches and commits. Test: could
+  the reader pass this name to someone else and get an answer? If yes, keep
+  it. A vague stand-in ("the same service", "the relevant system") is worse
   than the name.
+- **"Done" says where the reader can check it.** A PM checks a result in an
+  environment, not in git. Say where the change can be seen: production,
+  staging, a dev instance, and the page when that helps ("I've deployed it
+  to the LMS dev instance"). A branch, commit or merge request goes in only when the
+  reader works with it, e.g. a merge request they review. Check that the
+  change is really there before writing it. Built but not deployed anywhere
+  yet: say so instead of "done". Never cite an ID the reader cannot find
+  (another person's question numbers, internal decision IDs).
 - **Always write in English**, regardless of the ticket's language.
 - **Greet with "Hey <name>,"** — not "Hi", "Hello", or "Dear".
 - **Neutral tone, never deferential.** Avoid eager/servile filler like
@@ -38,10 +46,9 @@ How to draft and post comments on ClickUp tickets.
 - **Never promise a future deploy.** No "goes out with the next deployment",
   "will be live after the deploy", or any variant. By the time the comment is
   read the change is normally already running, so the sentence is both wrong
-  and noise. Pushed, and the project deploys on push: state it as done — "it's
-  live" — or, usually better, say nothing about deploying at all. Not pushed
-  yet: do not mention deploying in any form. Deploy manual or gated: name what
-  is required and who does it, never a vague future tense.
+  and noise. Already deployed: say where it is deployed (rule above). Not deployed
+  yet: say it is not visible anywhere yet, with no date. Deploy manual or
+  gated: name what is required and who does it, never a vague future tense.
 
 ## Structure
 
