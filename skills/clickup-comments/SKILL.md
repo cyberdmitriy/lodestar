@@ -87,6 +87,13 @@ How to draft and post comments on ClickUp tickets.
   at length, one concrete line on how it now works ("2. Done, the export runs
   every night at 2:00.") focuses the reader. Around the list: where it can be
   checked, what differs from the request, what the reader has to decide.
+- **Say what changed in the spec, on its own line.** When the work changed
+  the spec, e.g. the section statuses a project's workflow sets at the start
+  or the end of a ticket, add one line after the list: which sections, and
+  their new status, each section number a link to it in the spec viewer:
+  "Spec: [5.1.2.2](<spec viewer URL>#5.1.2.2-training-category) and
+  [5.1.2.6](<spec viewer URL>#5.1.2.6-event-image) are now In Development."
+  Write it only once the change is pushed and visible there.
 - **Make asks explicit.** When the task does need an answer or a decision,
   state exactly what is needed and from whom.
 - **End with the next step** when there is one — but never a deploy promise
@@ -113,10 +120,13 @@ Example, a status report with a question:
 > 1. Nightly export: done.
 > 2. Field Region: done.
 > 3. Region list: 12 regions, the five from the spec plus 7 I added. Does the client want others? Otherwise the list stays.
+>
+> Spec: [3.2](<spec viewer URL>#3.2-export) and [3.4](<spec viewer URL>#3.4-customer-form) are now Done.
 
 One line per item of the ticket, in its order. Items 1 and 2 are done as
 asked, so they say only "done"; item 3 differs from the spec and needs an
-answer, so it says more.
+answer, so it says more. The spec line is ours, not an item of the ticket, so
+it stands after the list.
 
 ## Procedure (never skip a step)
 
