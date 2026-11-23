@@ -1,6 +1,6 @@
 ---
 name: clickup-comments
-description: Use when about to post or draft a comment on a ClickUp task/ticket — replying to a question, giving a status update, or reporting what shipped. Ensures the comment is written in first person as Dmitry, short and in plain English that stays concrete (names services, environments and releases, says where a result can be checked, no code), @mentions the person it addresses, links every ticket it names, refers only to what the reader can see and does not restate what the ticket asked for, polished with the humanizer skill, shown as a draft first, and posted only after Dmitry's explicit OK.
+description: Use when about to post or draft a comment on a ClickUp task/ticket — replying to a question, giving a status update, or reporting what shipped. Ensures the comment is written in first person as Dmitry, short and in plain English that stays concrete (names services, environments and releases, says where a result can be checked, no code), @mentions the person it addresses, links every ticket it names, refers only to what the reader can see and reports item by item without restating what the ticket asked for, polished with the humanizer skill, shown as a draft first, and posted only after Dmitry's explicit OK.
 ---
 
 # ClickUp Comments
@@ -78,11 +78,15 @@ How to draft and post comments on ClickUp tickets.
   ticket or earlier comments. Add a question, decision or proposal only when
   the task needs it to be finished or to move forward; side findings and
   "nice to have" ideas go to the report or a separate ticket, not here.
-- **Don't repeat what was asked for.** The ticket or the reader's comment
-  already says what was required. A report on it says that it is done and
-  where it can be checked, then only what differs from the request, what is
-  still missing, and what the reader has to decide. Listing the requirements
-  back ("it now works like this: 1, 2, 3") only duplicates the ticket.
+- **Report item by item, without restating the items.** When the ticket or
+  the reader's comment lists what is needed, answer with a list in the same
+  order, one short line per item: "1. Done.", "2. Done.", "3. Not done: <why,
+  or the blocker>. <the question that unblocks it>". Name an item by its
+  number, or by a few words of it when the request is not numbered; do not
+  copy its description back. Optional: when an item was described vaguely or
+  at length, one concrete line on how it now works ("2. Done, the export runs
+  every night at 2:00.") focuses the reader. Around the list: where it can be
+  checked, what differs from the request, what the reader has to decide.
 - **Make asks explicit.** When the task does need an answer or a decision,
   state exactly what is needed and from whom.
 - **End with the next step** when there is one — but never a deploy promise
@@ -105,13 +109,14 @@ Example, a status report with a question:
 ✅ Concrete
 > Hey [@Anna](#user_mention#81344),
 >
-> Done, I've deployed it to staging.
->
-> Regions: the list has 12, the five from the spec plus 7 I added. Does the client want others? Otherwise the list stays.
+> I've deployed it to staging:
+> 1. Nightly export: done.
+> 2. Field Region: done.
+> 3. Region list: 12 regions, the five from the spec plus 7 I added. Does the client want others? Otherwise the list stays.
 
-The nightly export and the field Region are what the ticket asked for, so the
-report does not list them again; the extra regions differ from the spec, so
-they stay.
+One line per item of the ticket, in its order. Items 1 and 2 are done as
+asked, so they say only "done"; item 3 differs from the spec and needs an
+answer, so it says more.
 
 ## Procedure (never skip a step)
 
