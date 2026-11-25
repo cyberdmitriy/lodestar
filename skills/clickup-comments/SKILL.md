@@ -1,6 +1,6 @@
 ---
 name: clickup-comments
-description: Use when about to post or draft a comment on a ClickUp task/ticket — replying to a question, giving a status update, or reporting what shipped. Ensures the comment is written in first person as Dmitry, short and in plain English that stays concrete (names services, environments and releases, says where a result can be checked, no code), @mentions the person it addresses in the first sentence with no greeting line, links every ticket it names, refers only to what the reader can see and reports item by item without restating what the ticket asked for, polished with the humanizer skill, shown as a draft first, and posted only after Dmitry's explicit OK.
+description: Use when about to post or draft a comment on a ClickUp task/ticket — replying to a question, giving a status update, or reporting what shipped. Ensures the comment is written in first person as Dmitry, short and in plain English that stays concrete (names services, environments and releases, says where a result can be checked, no code), opens with an @mention of the person it addresses in a way that fits the thread ("Hey", "Btw" or straight in, never the same opening twice in a row), links every ticket it names, refers only to what the reader can see and reports item by item without restating what the ticket asked for, polished with the humanizer skill, shown as a draft first, and posted only after Dmitry's explicit OK.
 ---
 
 # ClickUp Comments
@@ -40,14 +40,23 @@ How to draft and post comments on ClickUp tickets.
   question numbers and internal decision IDs are invisible to them. Leave
   such a reference out; if the point matters, say it in plain words.
 - **Always write in English**, regardless of the ticket's language.
-- **No greeting line.** No "Hey <name>,", "Hi" or "Dear" opening the comment:
-  it starts with the content.
-- **@mention the person the comment is for, once, in the first sentence**, so
-  ClickUp notifies them: `[@Anna](#user_mention#81344) I've deployed it to
-  staging.`, with their numeric ClickUp user id. A plain "@Anna" stays text
-  and notifies no one. Any other person the comment names is an @mention the
-  first time too; later mentions of the same person are plain names. Take the
-  id from the `user.id` of their comment in the thread, or look it up with
+- **The opening fits the thread.** Look at Dmitry's last comment in this
+  ticket (step 1) and pick one:
+  - `Hey [@Anna](#user_mention#81344),` when it is the first comment to that
+    person in this ticket today and Dmitry's previous comment in the ticket
+    did not open with "Hey";
+  - `Btw [@Anna](#user_mention#81344), …` for something extra nobody asked
+    for: a side finding, a follow-up to Dmitry's own comment;
+  - `[@Anna](#user_mention#81344)` straight into the content, for a direct
+    answer to the question that person just asked, or a follow-up the same day.
+
+  Never the same opening twice in a row in a ticket; "Hey" at most once a day
+  per ticket. Never "Hi", "Hello" or "Dear".
+- **@mention the person the comment is for, once, in the opening**, so ClickUp
+  notifies them, with their numeric ClickUp user id. A plain "@Anna" stays
+  text and notifies no one. Any other person the comment names is an @mention
+  the first time too; later mentions of the same person are plain names. Take
+  the id from the `user.id` of their comment in the thread, or look it up with
   `mcp__clickup__clickup_find_member_by_name`.
 - **Every ticket you name is a link to it**, with the ticket ID as the text:
   `[PROJ-123](https://app.clickup.com/t/<workspace id>/PROJ-123)`. The URL is
@@ -133,7 +142,8 @@ it stands after the list.
    `mcp__clickup__clickup_get_threaded_comments` when a comment has replies).
    The recipient is whoever the comment is for — the person who asked the
    question, the last commenter in the thread, or the assignee. Note their
-   numeric user id for the @mention in the first sentence. If the recipient
+   numeric user id for the @mention in the opening, and note the opening and
+   date of Dmitry's last comment in the ticket (Voice). If the recipient
    is unclear, write with no @mention — a general comment aimed at the PM.
 2. **Draft** the comment per the Voice rules above.
 3. **Polish** the draft with the `humanizer` skill to strip AI-writing tells.
