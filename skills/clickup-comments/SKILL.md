@@ -1,6 +1,6 @@
 ---
 name: clickup-comments
-description: Use when about to post or draft a comment on a ClickUp task/ticket — replying to a question, giving a status update, or reporting what shipped. Ensures the comment is written in first person as Dmitry, short and in plain English that stays concrete (names services, environments and releases, says where a result can be checked, no code), @mentions the person it addresses, links every ticket it names, refers only to what the reader can see and reports item by item without restating what the ticket asked for, polished with the humanizer skill, shown as a draft first, and posted only after Dmitry's explicit OK.
+description: Use when about to post or draft a comment on a ClickUp task/ticket — replying to a question, giving a status update, or reporting what shipped. Ensures the comment is written in first person as Dmitry, short and in plain English that stays concrete (names services, environments and releases, says where a result can be checked, no code), @mentions the person it addresses in the first sentence with no greeting line, links every ticket it names, refers only to what the reader can see and reports item by item without restating what the ticket asked for, polished with the humanizer skill, shown as a draft first, and posted only after Dmitry's explicit OK.
 ---
 
 # ClickUp Comments
@@ -40,14 +40,14 @@ How to draft and post comments on ClickUp tickets.
   question numbers and internal decision IDs are invisible to them. Leave
   such a reference out; if the point matters, say it in plain words.
 - **Always write in English**, regardless of the ticket's language.
-- **Greet with "Hey <name>,"** — not "Hi", "Hello", or "Dear". The name is an
-  @mention (rule below).
-- **@mention a person the first time you name them.** The first time the
-  comment names a specific person, the greeting included, write the name as a
-  mention: `[@Anna](#user_mention#81344)`, with their numeric ClickUp user
-  id. A plain "@Anna" stays text and notifies no one. Later mentions
-  of the same person are plain names. Take the id from the `user.id` of
-  their comment in the thread, or look it up with
+- **No greeting line.** No "Hey <name>,", "Hi" or "Dear" opening the comment:
+  it starts with the content.
+- **@mention the person the comment is for, once, in the first sentence**, so
+  ClickUp notifies them: `[@Anna](#user_mention#81344) I've deployed it to
+  staging.`, with their numeric ClickUp user id. A plain "@Anna" stays text
+  and notifies no one. Any other person the comment names is an @mention the
+  first time too; later mentions of the same person are plain names. Take the
+  id from the `user.id` of their comment in the thread, or look it up with
   `mcp__clickup__clickup_find_member_by_name`.
 - **Every ticket you name is a link to it**, with the ticket ID as the text:
   `[PROJ-123](https://app.clickup.com/t/<workspace id>/PROJ-123)`. The URL is
@@ -114,9 +114,7 @@ Example, a status report with a question:
 > regions in the list? If not, it stays as it is.
 
 ✅ Concrete
-> Hey [@Anna](#user_mention#81344),
->
-> I've deployed it to staging:
+> [@Anna](#user_mention#81344) I've deployed it to staging:
 > 1. Nightly export: done.
 > 2. Field Region: done.
 > 3. Region list: 12 regions, the five from the spec plus 7 I added. Does the client want others? Otherwise the list stays.
@@ -134,10 +132,9 @@ it stands after the list.
    `mcp__clickup__clickup_get_task_comments` (and
    `mcp__clickup__clickup_get_threaded_comments` when a comment has replies).
    The recipient is whoever the comment is for — the person who asked the
-   question, the last commenter in the thread, or the assignee. Address them
-   by name in the comment, as an @mention: note their numeric user id. If the
-   recipient is unclear, write with no name-address — a general comment
-   aimed at the PM.
+   question, the last commenter in the thread, or the assignee. Note their
+   numeric user id for the @mention in the first sentence. If the recipient
+   is unclear, write with no @mention — a general comment aimed at the PM.
 2. **Draft** the comment per the Voice rules above.
 3. **Polish** the draft with the `humanizer` skill to strip AI-writing tells.
 4. **Show the draft to Dmitry.** Do NOT post yet.
