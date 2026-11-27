@@ -13,6 +13,7 @@ Standard library only, so it runs anywhere python3 exists.
 import json
 import re
 import sys
+import unicodedata
 from pathlib import Path
 
 # --- Limits (sources: references/sources.json) ---------
@@ -22,6 +23,22 @@ NAME_MAX = 64
 NAME_PATTERN = re.compile(r"^[a-z0-9-]+$")
 # platform docs: reserved words in name
 RESERVED_WORDS = ("anthropic", "claude")
+# Claude Code docs, "Resolve skills that share a name": a skill named ship, ship-local or
+# steward is not loaded where the bundled /ship is available; "Choose where skills load":
+# a folder named synced (any capitalization) is skipped. Neither applies inside a plugin.
+RESERVED_NAMES = {
+    "ship": "not loaded where the bundled /ship is available",
+    "ship-local": "not loaded where the bundled /ship is available",
+    "steward": "not loaded where the bundled /ship is available",
+    "synced": "Claude Code skips a skill folder with this name (it holds skills synced from claude.ai)",
+}
+# Claude Code docs, "Choose where skills load": `synced` is reserved as a folder name only
+FOLDER_ONLY_RESERVED = {"synced"}
+# Claude Code docs, "Characters a skill name can't hold": control, zero-width and
+# direction-changing (Cc, Cf), private-use (Co) and unassigned (Cn) characters; also
+# `<`, `>` and any blank other than one plain space between words (checked in code)
+REFUSED_NAME_CATEGORIES = {"Cc", "Cf", "Co", "Cn"}
+REFUSED_NAME_CHARS = "<>"
 # platform docs: description max 1,024 chars (hard API limit)
 DESCRIPTION_MAX = 1024
 # Claude Code docs: description + when_to_use truncated at 1,536 chars in the listing
@@ -39,7 +56,15 @@ KNOWN_FIELDS = {
     "disallowed-tools", "model", "effort", "context", "agent", "background",
     "hooks", "paths", "shell", "metadata", "license", "compatibility",
 }
+# Claude Code docs, frontmatter reference: booleans also accept yes/no/on/off/1/0, any case
 TRUE_VALUES = {"true", "yes", "on", "1"}
+FALSE_VALUES = {"false", "no", "off", "0"}
+# Claude Code docs, frontmatter `paths`: patterns are relative to the working directory and
+# match only files inside it, so a `../` pattern never matches
+PATHS_OUTSIDE_CWD = re.compile(r"(?:^|[\s,'\"\[-])\.\./")
+# Claude Code docs, "Angle brackets in a skill description": `<` and `>` in description and
+# when_to_use display as &lt; and &gt;
+ANGLE_BRACKET = re.compile(r"[<>]")
 
 XML_TAG = re.compile(r"<\s*/?\s*[A-Za-z][\w:-]*(\s[^<>]*)?>")
 FIRST_SECOND_PERSON = re.compile(
@@ -55,6 +80,10 @@ TIME_SENSITIVE = re.compile(
 WINDOWS_PATH = re.compile(r"(?<![\\\w])[\w.-]+\\[\w.-]+\.\w{1,5}\b")
 MD_LINK = re.compile(r"\]\(([^)\s#]+)(?:#[^)]*)?\)")
 CODE_PATH = re.compile(r"`((?:\$\{CLAUDE_SKILL_DIR\}/)?(?:references|reference|scripts|examples|assets|templates)/[^`\s]+)`")
+# A bundle path behind the skill-dir variable or a placeholder for it
+# (`<abs>/references/find.md`, `<skill-dir>/scripts/x.py`), as orchestrator
+# skills write them in subagent prompt templates, often inside fenced blocks.
+ROOTED_PATH = re.compile(r"(?:\$\{CLAUDE_SKILL_DIR\}|<[A-Za-z][\w-]*>)/((?:references|reference|scripts|examples|assets|templates)/[^\s`'\"),;]+)")
 
 
 def finding(rule, severity, file, line, message):
@@ -114,6 +143,8 @@ def local_refs(text):
             refs.add(target)
     for m in CODE_PATH.finditer(text):
         refs.add(m.group(1).replace("${CLAUDE_SKILL_DIR}/", ""))
+    for m in ROOTED_PATH.finditer(text):
+        refs.add(m.group(1).rstrip(".:"))
     return refs
 
 
@@ -121,8 +152,10 @@ def resolve_ref(ref, from_dir, skill_dir):
     """Return (paths, exists). Relative to the referring file first, then to the
     skill root. A templated ref (`references/<lang>.md`, `base/*.md`) covers
     every file in the directory before its first wildcard."""
-    if WILDCARD.search(ref):
-        prefix = ref[:WILDCARD.search(ref).start()].rsplit("/", 1)[0] if "/" in ref[:WILDCARD.search(ref).start()] else ""
+    wildcard = WILDCARD.search(ref)
+    if wildcard:
+        head = ref[:wildcard.start()]
+        prefix = head.rsplit("/", 1)[0] if "/" in head else ""
         for base in (from_dir, skill_dir):
             d = (base / prefix).resolve()
             if prefix and d.is_dir():
@@ -135,6 +168,25 @@ def resolve_ref(ref, from_dir, skill_dir):
                 return {p.resolve() for p in target.rglob("*") if p.is_file()}, True
             return {target}, True
     return set(), False
+
+
+def in_plugin(skill_dir):
+    """True when an ancestor folder holds `.claude-plugin/`, i.e. the skill ships in a plugin."""
+    return any((p / ".claude-plugin").is_dir() for p in skill_dir.parents)
+
+
+def refused_name_chars(text):
+    """Describe the characters Claude Code refuses in a skill or command name."""
+    bad = []
+    for ch in text:
+        cat = unicodedata.category(ch)
+        if ch in REFUSED_NAME_CHARS:
+            bad.append(f"'{ch}'")
+        elif cat in REFUSED_NAME_CATEGORIES or (cat.startswith("Z") and ch != " "):
+            bad.append(f"U+{ord(ch):04X}")
+    if "  " in text or text != text.strip(" "):
+        bad.append("a space that is not one space between words")
+    return bad
 
 
 def lint(skill_dir):
@@ -165,17 +217,33 @@ def lint(skill_dir):
     if name.lower() in ("helper", "utils", "tools", "documents", "data", "files"):
         out.append(finding("N3", "important", "SKILL.md", 1, f"`name` '{name}' is vague or generic."))
 
+    # --- directory name and reserved names ---
+    plugin = in_plugin(skill_dir)
+    bad_chars = refused_name_chars(skill_dir.name)
+    if bad_chars:
+        if plugin:
+            out.append(finding("N1", "minor", "SKILL.md", 1, f"Directory name '{skill_dir.name}' holds characters Claude Code refuses ({', '.join(bad_chars)}); in a plugin they become hyphens in the command name."))
+        else:
+            out.append(finding("N1", "critical", "SKILL.md", 1, f"Directory name '{skill_dir.name}' holds characters Claude Code refuses ({', '.join(bad_chars)}); the skill does not load."))
+    if not plugin:
+        dir_key = skill_dir.name.lower()
+        if dir_key in RESERVED_NAMES:
+            out.append(finding("N1", "critical", "SKILL.md", 1, f"Directory name '{skill_dir.name}' is reserved: {RESERVED_NAMES[dir_key]}."))
+        name_key = name.lower()
+        if name_key in RESERVED_NAMES and name_key not in FOLDER_ONLY_RESERVED and name_key != dir_key:
+            out.append(finding("N1", "critical", "SKILL.md", 1, f"`name` '{name}' is reserved: {RESERVED_NAMES[name_key]}."))
+
     # --- description ---
     desc = fields.get("description", "")
     when = fields.get("when_to_use", "")
+    manual_only = fields.get("disable-model-invocation", "").lower() in TRUE_VALUES
     if not desc:
-        out.append(finding("D1", "critical", "SKILL.md", 1, "`description` is empty or missing — Claude cannot discover the skill."))
+        out.append(finding("D1", "critical", "SKILL.md", 1, "`description` is empty or missing — required by the API and claude.ai upload; Claude Code falls back to the first body line, which rarely names triggers."))
     else:
         if len(desc) > DESCRIPTION_MAX:
             out.append(finding("D1", "critical", "SKILL.md", 1, f"`description` is {len(desc)} chars, max {DESCRIPTION_MAX}."))
         if XML_TAG.search(desc):
             out.append(finding("D1", "critical", "SKILL.md", 1, "`description` contains an XML tag."))
-        manual_only = fields.get("disable-model-invocation", "").lower() in TRUE_VALUES
         person = FIRST_SECOND_PERSON.search(desc)
         if person and not manual_only:
             out.append(finding("D2", "important", "SKILL.md", 1, f"`description` is not third person: '{person.group(0)}'."))
@@ -183,6 +251,9 @@ def lint(skill_dir):
             out.append(finding("D3", "important", "SKILL.md", 1, "`description` says what the skill does but no explicit 'when to use' trigger was found."))
     if len(desc) + len(when) > LISTING_MAX:
         out.append(finding("D4", "important", "SKILL.md", 1, f"`description` + `when_to_use` = {len(desc) + len(when)} chars; Claude Code truncates at {LISTING_MAX}."))
+    for field, value in (("description", desc), ("when_to_use", when)):
+        if ANGLE_BRACKET.search(value) and not (field == "description" and XML_TAG.search(value)):
+            out.append(finding("D7", "minor", "SKILL.md", 1, f"`{field}` contains `<` or `>`; Claude Code shows them as &lt; and &gt;. Write placeholders as [name] or move them to `argument-hint`."))
 
     # --- other frontmatter ---
     for key in fields:
@@ -194,11 +265,19 @@ def lint(skill_dir):
         out.append(finding("F2", "minor", "SKILL.md", 1, "`agent` has no effect without `context: fork`."))
     if fields.get("background") and fields.get("context") != "fork":
         out.append(finding("F2", "minor", "SKILL.md", 1, "`background` has no effect without `context: fork`."))
+    user_invocable_off = fields.get("user-invocable", "").lower() in FALSE_VALUES
+    model = fields.get("model", "")
+    if model and model.lower() != "inherit" and fields.get("context") != "fork":
+        if user_invocable_off:
+            out.append(finding("F2", "minor", "SKILL.md", 1, f"`model: {model}` never applies: only Claude invokes this skill, and without `context: fork` the session keeps its model."))
+        elif not manual_only:
+            out.append(finding("F2", "minor", "SKILL.md", 1, f"`model: {model}` applies only when the user types /name; when Claude invokes the skill, the session keeps its model."))
     if fields.get("context") == "fork" and "AskUserQuestion" in body:
         out.append(finding("F3", "critical", "SKILL.md", 1, "`context: fork` but the body uses AskUserQuestion — subagents cannot ask the user."))
-    if (fields.get("disable-model-invocation", "").lower() in TRUE_VALUES
-            and fields.get("user-invocable", "").lower() in {"false", "no", "off", "0"}):
+    if manual_only and user_invocable_off:
         out.append(finding("F4", "critical", "SKILL.md", 1, "Both `disable-model-invocation: true` and `user-invocable: false` — nobody can invoke the skill."))
+    if PATHS_OUTSIDE_CWD.search(fields.get("paths", "")):
+        out.append(finding("F6", "important", "SKILL.md", 1, "`paths` has a `../` pattern; patterns are relative to the working directory and match only files inside it, so it never activates the skill."))
     if len(fields.get("compatibility", "")) > COMPATIBILITY_MAX:
         out.append(finding("F1", "minor", "SKILL.md", 1, f"`compatibility` exceeds {COMPATIBILITY_MAX} chars."))
 

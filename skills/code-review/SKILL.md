@@ -1,14 +1,14 @@
 ---
 name: code-review
-description: "Code review of a branch, uncommitted changes, a layer, or a path: a fast one-pass review for small diffs, or a deep one covering logic gaps, security, UI impact, spec alignment, plus error-handling, simplification and project-rule checks. Fixes only on approval."
+description: "Code review of a branch, uncommitted changes, a layer, or a path: a fast one-pass review for small diffs, or a deep one covering logic gaps, security, UI impact, spec alignment, plus security-audit, error-handling, simplification and project-rule checks. Fixes only on approval."
 disable-model-invocation: true
 argument-hint: "[uncommitted | full | <layer> | <path> | <base-ref> e.g. origin/develop | <base>..HEAD] [--fast | --deep]"
-allowed-tools: Bash(git *)
+allowed-tools: Bash(git diff *), Bash(git ls-files *), Bash(git rev-parse *), Bash(git merge-base *), Bash(git rev-list *), Bash(git symbolic-ref *), Bash(git check-attr *), Bash(git grep *), Bash(git fetch *), Bash(git branch --show-current *)
 ---
 
 # File layout
 
-- `SKILL.md` (this file) — the orchestrator. Runs in the main conversation, because only there can it ask the user (AskUserQuestion is not available to subagents or `context: fork`). It resolves the scope, picks the depth, starts the review subagent, relays the report, asks which issues to fix, and starts the fix subagent. It never reads or analyzes the code itself.
+- `SKILL.md` (this file) — the orchestrator. Runs in the main conversation, because only there can it ask the user (AskUserQuestion is not available to subagents or `context: fork`). It resolves the scope, picks the depth, starts the review subagent, relays the report, asks which issues to fix, starts the fix subagent, and after a fast review offers `/lodestar:security-audit`. It never reads or analyzes the code itself.
 - `references/review-fast.md` — the fast review: one agent, one pass over a small diff. Runs in a subagent.
 - `references/review.md` — the deep review (Phases 1–3). Runs in a subagent: isolated from the session's reasoning, and only its report comes back to the main context.
 - `references/fix.md` — applying approved fixes. Runs in a second subagent.
@@ -19,7 +19,7 @@ Editing this skill? Read [MAINTAINING.md](MAINTAINING.md) first. Do not load it 
 
 # Orchestrator
 
-You run in the main conversation. Your jobs: resolve the scope with the user, pick the review depth, start the review subagent, relay its report, ask which issues to fix, start the fix subagent. **Do not read, analyze, or fix the code yourself** — that is what keeps the review independent and the main context clean.
+You run in the main conversation. Your jobs: resolve the scope with the user, pick the review depth, start the review subagent, relay its report, ask which issues to fix, start the fix subagent, and after a fast review offer the security audit. **Do not read, analyze, or fix the code yourself** — that is what keeps the review independent and the main context clean.
 
 Reference files live in this skill's base directory: `${CLAUDE_SKILL_DIR}/references/` (the same path is shown as "Base directory for this skill" when the skill loads). Pass subagents the absolute paths.
 
@@ -46,12 +46,14 @@ If the argument is ambiguous or the ref does not resolve (`git rev-parse --verif
 
 ## Step 2 — Detect changes
 
-1. **Find base candidates.** Check the remote first: `git symbolic-ref --short refs/remotes/origin/HEAD`, then whichever of `origin/develop`, `origin/main`, `origin/master` exist (`git rev-parse --verify --quiet <ref>`). With no `origin` remote, use the local `develop` / `main` / `master`. Keep every candidate that exists — there can be more than one.
+1. **Find base candidates.** The ref that `git symbolic-ref --short refs/remotes/origin/HEAD` points to, and whichever of `origin/develop`, `origin/main`, `origin/master`, `origin/production`, `origin/staging` exist (`git rev-parse --verify --quiet <ref>`), each ref once. With no `origin` remote, use the local `develop` / `main` / `master`. Keep every candidate that exists — there can be more than one.
 2. **Refresh remote refs:** `git fetch origin --quiet`. If it fails (offline, no access), continue with the local copy of the ref and say it may be stale.
-3. **Uncommitted changes:** `git diff --name-only HEAD` plus untracked files from `git ls-files --others --exclude-standard`.
-4. **Branch changes:** `git diff --name-only <base>...HEAD` — three dots, so the diff starts at the merge-base. Two dots would compare against the tip of `<base>` and pull in every commit that landed on `<base>` after the branch was cut, as reversed changes.
-5. Merge uncommitted and branch lists, deduplicate: the **branch changeset**.
-6. Counts: N uncommitted files, X branch files (including uncommitted), `git rev-list --count <base>..HEAD` commits ahead.
+3. **Order the candidates.** For each: `git merge-base <candidate> HEAD`, then `git rev-list --count <merge-base>..HEAD` commits ahead. Sort nearest first (fewest commits ahead). `<base>` from here on is the nearest one.
+4. **Uncommitted changes:** `git diff --name-only HEAD` plus untracked files from `git ls-files --others --exclude-standard`.
+5. **Branch changes:** `git diff --name-only <base>...HEAD` — three dots, so the diff starts at the merge-base. Two dots would compare against the tip of `<base>` and pull in every commit that landed on `<base>` after the branch was cut, as reversed changes.
+6. Merge uncommitted and branch lists, deduplicate: the **branch changeset**.
+7. Counts: N uncommitted files, X branch files (including uncommitted), `git rev-list --count <base>..HEAD` commits ahead.
+8. **Base check.** `origin/HEAD` can point to a branch nobody has used for years, and a branch stacked on another feature branch has its real base outside the candidates. So the nearest base **looks wrong** when it is more than 50 commits ahead or the branch changeset holds more than 100 files. Skip this check for a ref argument: it is used as given.
 
 ## Step 3 — Detect project layers
 
@@ -74,6 +76,8 @@ Branch: <branch> — <N> commits ahead of <base> | Uncommitted: <M> files | Bran
 Layers: [Layer 1], [Layer 2], [Layer 3]
 ```
 
+When the base looks wrong (Step 2, **Base check**), add a third line: `⚠ <base> looks wrong: <N> commits ahead, <X> files. The real base may be another branch.`
+
 Then ask with the **AskUserQuestion** tool — one question, header `Scope`, up to 4 options, the recommended one first with `(Recommended)` in its label:
 
 | Option label | Description | Show when |
@@ -84,11 +88,12 @@ Then ask with the **AskUserQuestion** tool — one question, header `Scope`, up 
 | `One layer` | All files of one layer: [Layer 1], [Layer 2]… | 2+ layers detected |
 
 - **Recommended:** `Branch vs <base>`. Zero commits ahead but uncommitted changes → `Uncommitted only`. Neither → `Full codebase`.
+- **Base looks wrong** (Step 2, **Base check**): never recommend `Branch vs <base>`. Recommend `Uncommitted only` when M > 0, otherwise recommend nothing. Start the question text with the warning line and ask for the real base ref in Other.
 - Use the real base name in the label (`Branch vs origin/develop`), never a placeholder.
 - End the question text with: *"Or type a ref / range (e.g. `origin/main`, `origin/develop..HEAD`) or a path in Other."* Resolve a typed answer with the Step 1 rules.
 
 Follow-up questions, a second AskUserQuestion call, only when needed:
-- `Branch vs <base>` picked and Step 2 found more than one base candidate → `Which base?`, one option per candidate (up to 4), the one from the label first.
+- `Branch vs <base>` picked and Step 2 found more than one base candidate → `Which base?`, one option per candidate (up to 4), nearest first, each described by its commits ahead.
 - `One layer` picked → `Which layer?`, one option per layer (up to 4; list the rest in the question text for Other).
 
 If AskUserQuestion is not available, print the same options as a numbered list and wait for the reply.
@@ -115,7 +120,7 @@ Announce:
 ## Step 6 — Pick the depth
 
 - **fast** — one agent, one pass over the diff: correctness, security and access, spec alignment, project rules, and the tests and docs of the changed behavior. Needs a diff, so only uncommitted and branch scope.
-- **deep** — the full review: dependency map, parallel analysis, error-handling audit, simplification, rules check, linters and static analysis. For large diffs and before a merge request.
+- **deep** — the full review: dependency map, parallel analysis, security audit, error-handling audit, simplification, rules check, linters and static analysis. For large diffs and before a merge request.
 
 A depth flag from Step 1 decides it, with no measuring and no question. `--fast` with full codebase, layer or path scope → say that fast needs a diff and use deep.
 
@@ -132,7 +137,7 @@ Decide:
 
 | Option label | Description |
 |---|---|
-| `Fast` | One pass over the diff: correctness, security, spec, project rules, tests and docs of the changed behavior. Skips UI-impact tracing, error-handling audit, simplification and wider test coverage |
+| `Fast` | One pass over the diff: correctness, security, spec, project rules, tests and docs of the changed behavior. Skips UI-impact tracing, error-handling audit, simplification and wider test coverage. Offers the separate security audit afterwards when the diff touches security-sensitive code |
 | `Deep` | The full multi-phase review, with the project's linters and static analysis (not the test suite). Slower; use before a merge request |
 
 Recommend `Fast`, or `Deep` when there is any risk signal. Put the recommended option first with `(Recommended)` in its label, and give the reason in the question text: `9 files, +320 lines` or `touches a migration: database/migrations/2026_11_05_add_index.php`. If AskUserQuestion is not available, print the two options and wait.
@@ -169,7 +174,7 @@ Scope:
 
 The subagent's report is not shown to the user automatically. Print it **in full, verbatim** — every table, every issue number.
 
-If it found no issues at all, outside the diff included, stop here.
+If it found no issues at all, outside the diff included, go to Step 11.
 
 ## Step 9 — Ask which issues to fix
 
@@ -182,14 +187,14 @@ Leave out the second part when N is 0. Build the options from the report's **Rec
 | `Fix now (Recommended)` | Issues <numbers>: the ones the review marked Fix now |
 | `Critical + Important` | Every Critical and Important issue |
 | `Everything` | Every issue in Issues by Severity. `O` issues (outside the diff) are never included |
-| `Report only` | Fix nothing, stop here |
+| `Report only` | Fix nothing |
 
 - Nothing marked Fix now → drop the first option and recommend `Critical + Important`; with no Critical or Important issues either, drop that one too and recommend `Report only`.
 - The Fix-now set equals the Critical + Important set → drop `Critical + Important`.
 - End the question text with: *"Or type issue numbers in Other, with a note per issue if you want, e.g. `1, 3, O2, 5: backlog only`."*
 - If AskUserQuestion is not available, print the choices and wait.
 
-`Report only` → stop.
+`Report only` → Step 11.
 
 **Choices between fixes.** For every approved issue listed in the report's **Decisions needed**, ask with AskUserQuestion: one question per issue, up to 4 per call, header `#<number>`, the report's options as option labels with the recommended one first and `(Recommended)` in its label. Skip an issue whose note from the user already picks an option.
 
@@ -217,3 +222,39 @@ Review report:
 ```
 
 Relay its result to the user in full. If it stopped on a regression, show what failed and ask with AskUserQuestion how to proceed (skip that issue and continue with the rest / stop here). To continue, start a new fix subagent with the remaining numbers and their User decisions.
+
+When the fixes are done, go to Step 11.
+
+## Step 11 — Offer the security audit (fast depth only)
+
+Skip this step after a deep review: it already ran `/lodestar:security-audit`.
+
+Read the **Security coverage** section of the fast report.
+
+**Recommendation `not needed`** → print one line and stop:
+
+> **Security:** the fast pass checked authorization, injection, input validation and secrets; the diff has no security-sensitive changes, so a separate audit is not needed.
+
+**Otherwise**, first say what was already checked, from that section:
+
+```
+Security in the fast pass
+- Checked: <the "Checked in this pass" line>
+- Found: <each Security issue: number and title; mark the ones fixed in Step 10; or "nothing">
+- Not checked: <the "Not checked here" line>
+- Security-sensitive changes: <the list>
+```
+
+Then ask with **AskUserQuestion**, header `Security`. Pick the options by the situation, the recommended one first with `(Recommended)` in its label:
+
+| Situation | Options |
+|---|---|
+| Security issues found, all fixed in Step 10 | `Run security audit` — checks the fixes and traces the rest of the sensitive changes; `Not now` |
+| Security issues found, some not fixed | `Fix #<numbers>, then audit` — fix them first, so the audit checks the fixed code; `Audit now` — the unfixed issues will show up again in the audit; `Not now` |
+| No security issues | `Run security audit` — the fast pass did not trace these changes in depth; `Not now` |
+
+Give the reason in the question text: the number of security-sensitive changes and the riskiest one, e.g. `3 security-sensitive changes, including a new public endpoint POST /orders/{id}/refund`. If AskUserQuestion is not available, print the options and wait.
+
+- `Fix #<numbers>, then audit` → for those issues, ask the **Decisions needed** questions as in Step 9, run Step 10 with them, then run the audit.
+- `Run security audit` or `Audit now` → invoke `/lodestar:security-audit` with the Skill tool, on the review's scope: uncommitted → `uncommitted`; branch → `<base>`. No `--report-only`: the audit shows its own report and asks about its own fixes. Pass it nothing from the review report or this conversation; it starts fresh.
+- `Not now` → stop.

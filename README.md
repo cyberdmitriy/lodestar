@@ -19,6 +19,7 @@ All skills are invoked as `/lodestar:<skill>`.
 | audit-solution | `/lodestar:audit-solution` | Vet plans/solutions for workarounds and fragile approaches |
 | grilling | `/lodestar:grilling` | Stress-test a plan, decision or idea with relentless questions |
 | error-handling-audit | `/lodestar:error-handling-audit` | Find silent failures and logging gaps (Python, Laravel, React) |
+| security-audit | `/lodestar:security-audit` | Find exploitable vulnerabilities in uncommitted work, a branch or a path; every candidate is checked by a separate verifier agent (Laravel, Drupal, Node/React/Electron checklists) |
 | design-fresh | `/lodestar:design-fresh` | Intentional, trend-aware UI with a creative reset on demand + cross-session design journal |
 | design-variations | `/lodestar:design-variations` | Render N distinct design options as one click-to-comment HTML artifact |
 | design-reference | `/lodestar:design-reference` | UI/UX reference: styles, palettes, font pairings, charts and stack-specific guidance |

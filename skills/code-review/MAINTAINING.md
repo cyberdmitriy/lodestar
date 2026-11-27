@@ -6,7 +6,7 @@ This skill is designed around a clear separation of concerns. Understand it befo
 
 ## File layout
 
-- `SKILL.md` — the orchestrator. Runs in the main conversation, because only there can it ask the user (AskUserQuestion is not available to subagents or `context: fork`). It resolves the scope, picks the depth, starts the review subagent, relays the report, asks which issues to fix, and starts the fix subagent. It never reads or analyzes the code itself.
+- `SKILL.md` — the orchestrator. Runs in the main conversation, because only there can it ask the user (AskUserQuestion is not available to subagents or `context: fork`). It resolves the scope, picks the depth, starts the review subagent, relays the report, asks which issues to fix, starts the fix subagent, and after a fast review offers `/lodestar:security-audit`. It never reads or analyzes the code itself.
 - `references/review-fast.md` — the fast review: one agent, one pass over a small diff. Runs in a subagent.
 - `references/review.md` — the deep review (Phases 1–3). Runs in a subagent: isolated from the session's reasoning, and only its report comes back to the main context.
 - `references/fix.md` — applying approved fixes. Runs in a second subagent.
@@ -22,6 +22,8 @@ Review checklists go in `references/review.md` and `references/review-fast.md`, 
 - Both reports keep the same numbered Issues tables (`#`, `File:Line`, `Issue`, `Confidence`, `Source`, `Fix`), because `references/fix.md` reads either one, and the same **Recommended fixes** and **Decisions needed** sections, because `SKILL.md` Step 9 builds the Fix question from them. Change these in both files or in neither.
 - Issues in code the diff does not change stay out of the fix options: deep lists them as `O1`, `O2`… under **Outside the diff**, fast only counts them. The user can still pick one by typing its number.
 - What the user decides about a fix (an option, a note like "backlog only") reaches the fix subagent only through the `User decisions` block in Step 10. Never leave it to the conversation: the subagent does not see it.
+- The deep review calls `/lodestar:security-audit --report-only` in Phase 2 Step 5. Security categories, stack checklists and exclusions live in that skill; the Security section of `references/review.md` and "Security and access" in `references/review-fast.md` stay short in-pass checks. Make security checking deeper in `security-audit`, not here.
+- The fast review never calls `security-audit` itself. Its report has a **Security coverage** section (what the pass checked, the Security issues, the security-sensitive changes, a recommendation), and `SKILL.md` Step 11 reads it after the fix step to offer the audit. The section's three recommendations and Step 11's situations must match: change them together.
 - The fast checklist is a short subset of the deep one. When you change a correctness or security check in `references/review.md`, check whether `references/review-fast.md` has the same item and update it too.
 
 ## What belongs in `references/review.md` (deep analysis requiring reasoning)

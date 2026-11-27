@@ -26,7 +26,7 @@ Severity:
 
 ## N: Naming
 
-- **N1** critical, lint. `name`: at most 64 chars, only `[a-z0-9-]`, no XML tags, no reserved words `anthropic` or `claude`.
+- **N1** critical, lint. `name`: at most 64 chars, only `[a-z0-9-]`, no XML tags, no reserved words `anthropic` or `claude`. The directory name holds none of the characters Claude Code refuses (zero-width or control, private-use or unassigned, direction-changing, any blank other than one space between words, `<`, `>`): outside a plugin such a folder does not load; in a plugin they become hyphens in the command (minor). Outside a plugin, not a name Claude Code reserves: `ship`, `ship-local`, `steward` (not loaded where the bundled `/ship` exists), or a folder named `synced` in any capitalization (skipped).
 - **N2** important, lint. `name` equals the directory name. In a plugin the command is `/<plugin>:<name>`; do not repeat the plugin name inside `name`.
 - **N3** important, both. Not vague or generic (`helper`, `utils`, `tools`, `documents`, `data`, `files`).
 - **N4** minor, judge. Follows the naming pattern of sibling skills in the same collection. Gerund form (`processing-pdfs`) is preferred; noun phrases (`pdf-processing`) and action form (`process-pdfs`) are acceptable. Do not rename a skill only for gerund form when its siblings use another pattern: renaming breaks invocations and cross-references.
@@ -35,20 +35,23 @@ Severity:
 
 With `disable-model-invocation: true`, Claude never sees the description; only the user does. D2, D3, D5 and D6 do not apply then: the description only needs to tell the user what the skill does.
 
-- **D1** critical, lint. Non-empty, at most 1,024 chars, no XML tags.
+- **D1** critical, lint. Non-empty, at most 1,024 chars, no XML tags. A missing `description` is a hard error for the API and claude.ai upload; Claude Code falls back to the first non-empty body line, which rarely names triggers.
 - **D2** important, both. Third person ("Processes Excel files…"). Not "I can…" or "You can use this…". The description is injected into the system prompt.
 - **D3** important, both. States what the skill does and when to use it, with concrete trigger terms users actually say: file types, tool names, phrases. Vague ("Helps with documents") fails.
 - **D4** important, lint. `description` + `when_to_use` at most 1,536 chars; Claude Code truncates the listing there.
 - **D5** important, judge. The main use case and trigger come first, since truncation cuts the end. The description does not summarize the workflow; the body does that.
 - **D6** minor, judge. Every description is loaded into context in every session. Long keyword lists cost tokens in every conversation; keep only the triggers that change selection.
+- **D7** minor, lint. No `<` or `>` in `description` or `when_to_use`: Claude Code displays them as `&lt;` and `&gt;`. Write placeholders as `[branch]` or move them to `argument-hint`.
 
 ## F: Claude Code frontmatter fields
 
 - **F1** minor, lint. Only documented fields: `name`, `description`, `when_to_use`, `argument-hint`, `arguments`, `disable-model-invocation`, `user-invocable`, `allowed-tools`, `disallowed-tools`, `model`, `effort`, `context` (only `fork`), `agent`, `background`, `hooks`, `paths`, `shell`, `metadata`, `license`, `compatibility` (at most 500 chars).
-- **F2** minor, lint. `agent` and `background` only take effect with `context: fork`.
-- **F3** critical, both. A `context: fork` skill cannot ask the user (no AskUserQuestion) and has no conversation history. A skill that needs mid-run questions runs in the main conversation and delegates isolated work to subagents via the Agent tool.
+- **F2** minor, lint. `agent` and `background` only take effect with `context: fork`. `model` takes effect only when the user types `/name`, or with `context: fork`: when Claude invokes the skill without a fork, the session keeps its model; with `user-invocable: false` and no fork, `model` never applies.
+- **F3** critical, both. A `context: fork` skill cannot ask the user (no AskUserQuestion) and has no conversation history; with `agent: Explore` or `Plan` it also starts without CLAUDE.md and git status, so the body cannot rely on project CLAUDE.md content. A skill that needs mid-run questions runs in the main conversation and delegates isolated work to subagents via the Agent tool.
 - **F4** critical, lint. Not both `disable-model-invocation: true` and `user-invocable: false`; then nothing can invoke the skill.
 - **F5** important, judge. Uses `$ARGUMENTS` / `$0` / named `arguments` when it takes input, and `argument-hint` documents them. Bundled files are referenced via `${CLAUDE_SKILL_DIR}` when they must be run or read by absolute path.
+- **F6** important, both. `paths` patterns are relative to the directory the session starts in and match only files inside it: no `../` patterns, and none aimed at another worktree or an added directory. Such a pattern never activates the skill.
+- **F7** critical, judge. Only for a skill meant to leave Claude Code: uploaded to claude.ai, sent through the Skills API, packaged with `package_skill.py`, or a personal skill enabled for the claude.ai account (Cowork, cloud sessions, scheduled tasks). Its frontmatter holds only `name`, `description`, `license`, `compatibility`, `metadata`, `allowed-tools`: any other field (`argument-hint`, `disable-model-invocation`, `when_to_use`, …) fails packaging or upload with a hard "Unexpected key(s)" error. Judge the target from the README, packaging scripts or what the user says; a plugin skill used only in Claude Code is not affected.
 
 ## P: Progressive disclosure and files
 
@@ -97,9 +100,11 @@ Skip this section when the skill has no scripts and calls no tools by name.
 ## L: Lifecycle and invocation (Claude Code)
 
 - **L1** important, judge. Skills with side effects (deploy, send, commit, post) set `disable-model-invocation: true`. Pure background knowledge that is not an action may set `user-invocable: false`.
-- **L2** minor, judge. `allowed-tools` is as narrow as the task (`Bash(git status *)`, not bare `Bash`) and only pre-approves tools the skill really uses. Before narrowing, list every command the skill runs; a pattern that misses one adds a permission prompt on every run.
-- **L3** minor, judge. Instructions are written as standing guidance. Rendered SKILL.md stays in context for the rest of the session and is not re-read, so steps that assume "only at the start" still read correctly later.
-- **L4** minor, judge. `` !`command` `` injection is used for live data the skill always needs. A command that may exit non-zero has `|| true`, since a failing command aborts the invocation.
+- **L2** minor, judge. `allowed-tools` is as narrow as the task (`Bash(git status *)`, not bare `Bash`) and only pre-approves tools the skill really uses. Before narrowing, list every command the skill runs: a pattern that misses a tool call adds a permission prompt on every run; one that misses an injected `` !`command` `` aborts the whole invocation outside auto mode.
+- **L3** minor, judge. Instructions are written as standing guidance. Rendered SKILL.md stays in context across turns until compaction, which keeps only its first 5,000 tokens, and is not re-read, so steps that assume "only at the start" still read correctly later. Rules that must survive a long session sit near the top of SKILL.md.
+- **L4** minor, judge. `` !`command` `` injection is used for live data the skill always needs. A command that may exit non-zero has `|| true`, since a failing command aborts the invocation. Every injected command is allowed by `allowed-tools` or the user's allow rules: outside auto mode an unmatched one aborts the invocation, and a deny or ask rule aborts it even when it is listed.
+- **L5** minor, judge. A rule that must hold on every event (each edit, each commit) is enforced by a hook in settings or in the plugin's `hooks/hooks.json`, not by skill text alone, nor by the skill's own `hooks` frontmatter, which starts only at invocation and has documented limits. In a personal or project skill, managed settings can switch frontmatter `hooks` off, and the skill's `allowed-tools` grant is then dropped too; ship such a skill in a plugin.
+- **L6** minor, judge. Only for a skill served by an MCP server: it works without the frontmatter Claude Code ignores there (`allowed-tools`, `disallowed-tools`, `hooks`, `model`, `effort`, `context`, `agent`, `background`, `shell`, `paths`, `metadata`), without `` !`command` `` injection or `@` references, and without `${CLAUDE_PROJECT_DIR}` and `${CLAUDE_SESSION_ID}`, which are not substituted.
 
 ## T: Testing
 

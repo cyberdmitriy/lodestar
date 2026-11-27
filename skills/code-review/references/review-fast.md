@@ -4,6 +4,15 @@ You are the review subagent started by `/lodestar:code-review` for a small diff.
 
 Fast means one agent and one pass. The deep review maps dependencies, runs parallel analysis agents and sibling skills; this run does none of that. It covers the checks that find most real problems in a small change, and reads only what the diff needs.
 
+## Contents
+
+- Inputs, Output, Limits
+- Step 1 — Start
+- Step 2 — Read the context, one hop
+- Step 3 — One pass over the diff: correctness, security and access, spec and ticket, project rules, tests and docs, simplification
+- Step 4 — Verify, then stop the clock
+- Report: header, file heat map, issues by severity, recommended fixes, decisions needed, verdict, security coverage, outside the diff, not covered
+
 ## Inputs
 
 Your prompt gives you a scope block:
@@ -71,6 +80,17 @@ Go hunk by hunk and check every area below for each.
 - No injection: SQL built from user input, shell commands, unescaped output (XSS), path traversal, unsafe deserialization
 - Input validated at the boundary; no mass assignment of fields the user must not set
 - No secrets, tokens or personal data in code, logs, errors or responses. For a log line, propose logging identifiers and metadata (IDs, status codes, counts) instead — never removing the log line
+
+As you go, note every **security-sensitive change** for the Security coverage section of the report, whether or not it has a finding:
+
+- a new or changed entry point: route, controller action, API endpoint, form handler, webhook, IPC handler, a queue job fed by user input
+- authentication, authorization, permissions, middleware, CSRF settings, session or token handling
+- SQL or query parts built from variables; shell commands, `eval`, deserialization, templates compiled at run time
+- raw HTML output
+- file upload, download, or a file path built from input
+- outbound requests or redirects to a URL from input
+- secrets, `.env` or settings files, cryptography
+- Electron window settings, preload scripts, IPC
 
 ### Spec and ticket
 
@@ -154,7 +174,7 @@ Number issues sequentially across all severity groups (1, 2, 3…). The orchestr
 |---|---|---|---|---|---|
 | 3 | `app/Services/...`:77 | Response key is snake_case, rule requires camelCase | 85 | Rules | Rename to `orderId` |
 
-Source tags: `Logic`, `Security`, `Spec`, `Rules`, `Testing`, `Docs`, `Efficiency`, `Generated`.
+Source tags: `Logic`, `Security`, `Spec`, `Rules`, `Testing`, `Docs`, `Efficiency`, `Generated`. Tag every security finding `Security`: the Security coverage section and the orchestrator find them by this tag.
 
 When two or more fixes are reasonable and the choice is the user's, give 2–4 options in the Fix column (`A: …; B: …`), the one you recommend first, and list the issue under **Decisions needed**.
 
@@ -188,6 +208,27 @@ Omit this section when no issue offers options.
 >
 > **Reasoning:** [1-2 sentence technical assessment]
 
+### Security coverage
+
+The orchestrator reads this section to decide whether to offer a separate security audit after the fix step. Keep the labels exactly as below; the first and third lines are fixed text.
+
+```
+Checked in this pass: authorization on new and changed entry points; injection (SQL, shell, XSS, path traversal, deserialization); input validation and mass assignment; secrets and personal data in code, logs, errors and responses.
+Found: <issue numbers with Source Security, e.g. #1, #2; or "none">
+Not checked here: data flow beyond one hop, stack-specific checklists, a separate check of each finding by another agent.
+Security-sensitive changes:
+- `routes/api.php`:14 — new endpoint `POST /orders/{id}/refund`
+- `app/Http/Controllers/UploadController.php`:30 — upload stored on the public disk
+(or "none")
+Recommendation: <one of the three below>
+```
+
+Recommendation, by the first rule that matches:
+
+1. `Found` lists issues → `fix #<numbers>, then run /lodestar:security-audit: this pass found holes in this area; the audit checks the fixes and traces the rest.`
+2. `Security-sensitive changes` lists anything → `run /lodestar:security-audit: <the changes in a few words>.`
+3. Otherwise → `not needed: no security-sensitive changes.`
+
 ### Outside the diff
 
 One line: `Outside the diff: N noticed, not reviewed in fast depth.` Add one line per problem only when it could be Critical. Omit the section when N is 0.
@@ -198,6 +239,7 @@ Fast depth skips these. List them, and add a note to any that matters for this d
 
 - Full UI-impact tracing and user-flow walk-through
 - Error-handling audit (`/lodestar:error-handling-audit`)
+- Separate security audit (`/lodestar:security-audit`): see **Security coverage**
 - Code reuse, quality and efficiency review, apart from findings with a real effect
 - Test coverage beyond the changed behavior
 - Backward-compatibility shims

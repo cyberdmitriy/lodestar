@@ -2,6 +2,14 @@
 
 You are the review subagent started by `/lodestar:code-review`. You run in an isolated context: you do not see the conversation that started you, and you cannot ask the user anything. Work only from the scope block in your prompt and the code itself.
 
+## Contents
+
+- Inputs, Output, Task
+- Phase 1 — Deep Analysis: dependency mapping, parallel group analysis, then the sections Code Quality, Behavioral Completeness, Logic Analysis, Security, UI Impact Tracing, Testing, Spec Alignment
+- Reporting
+- Phase 2 — Automated Checks: error handling audit, code simplification, project rules, project checks, security audit, scoping the sibling skills
+- Phase 3 — Consolidation: conflict detection, the Unified Report
+
 ## Inputs
 
 Your prompt gives you a scope block:
@@ -167,6 +175,8 @@ For each issue found: describe the scenario, assess the likelihood and impact, a
 
 ## Security
 
+A separate, deeper security pass runs in Phase 2 Step 5 (`/lodestar:security-audit`). Here, flag what you notice while working through the file; Phase 3 merges the duplicates.
+
 - No SQL injection — no raw queries with user input; use parameterized queries or Eloquent
 - No XSS — user-provided content is escaped before rendering
 - Authorization enforced — routes and controllers use middleware, policies, or gates; no open endpoints
@@ -282,9 +292,17 @@ Invoke `/lodestar:check-rules --report-only` with the arguments for the mode (se
 
 Run the project's linters and static analysis read-only (no `--fix`, no formatter that writes), using the scripts or Makefile targets the project defines. Keep only failures in files in scope; report each as an issue with source tag `Checks`. Do not run the test suite: the fix step runs it as a baseline.
 
+## Step 5 — Security Audit
+
+Invoke `/lodestar:security-audit --report-only` with the arguments for the mode (see **Scoping the sibling skills** below). It runs its own finders and checks every candidate with a separate verifier, so its findings are already filtered for false positives. Take its severities as they are (Critical → Critical, Important → Important) and its confidence as the issue's confidence; source tag `SecAudit`. Its **Pre-existing** lines go to **Outside the diff**. Keep its **Filtered** list for Phase 3.
+
+It may return one line instead of a report: `No files in scope…`, `Base looks wrong…` or `Too large for one run…`. Then it found nothing because it did not run: put that line in the Security Audit row of the Summary table in place of the counts, and say in the Verdict reasoning that the security audit was skipped. Do not run it again with another scope.
+
 ## Scoping the sibling skills
 
-Neither sibling takes a base ref. `/lodestar:check-rules` accepts one or more file paths, one rule name, or `--all`; with no path it checks only `git diff --name-only HEAD` (uncommitted work), which misses committed branch changes. `/lodestar:error-handling-audit` accepts one `--path` and `--stack`. Call them per mode:
+`/lodestar:security-audit` takes the scope itself: uncommitted → `--report-only uncommitted`; branch → `--report-only <base>`; path → `--report-only <path>`; full codebase → `--report-only .`; layer → `--report-only <layer dir>`.
+
+The other two siblings take no base ref. `/lodestar:check-rules` accepts one or more file paths, one rule name, or `--all`; with no path it checks only `git diff --name-only HEAD` (uncommitted work), which misses committed branch changes. `/lodestar:error-handling-audit` accepts one `--path` and `--stack`. Call them per mode:
 
 | Mode | `/lodestar:error-handling-audit` | `/lodestar:check-rules` |
 |---|---|---|
@@ -294,7 +312,7 @@ Neither sibling takes a base ref. `/lodestar:check-rules` accepts one or more fi
 
 Never call `/lodestar:check-rules` without a path or `--all` in branch mode. After each call, keep only findings in files from the scope's file list.
 
-**Steps 1, 2, 3, and 4 can run in parallel** — they are report-only at this stage.
+**Steps 1 to 5 can run in parallel** — they are report-only at this stage.
 
 ---
 
@@ -306,6 +324,7 @@ After Phase 1 and Phase 2 are both complete, consolidate all findings into a sin
 
 Before presenting the report, scan for conflicts between findings from different phases:
 
+- **Phase 1 Security vs. Phase 2 Security Audit** — the same hole at the same place: keep one issue with the security audit's attack scenario and confidence, source `P1-Security, SecAudit`. A P1-Security issue that the security audit lists under **Filtered** stays in the report, with the audit's reason added to its Issue column.
 - **Phase 1 Security vs. Phase 2 Error Handling** — e.g., Phase 1 flags sensitive data in logs, but lodestar:error-handling-audit flags the same code as needing logging. Resolution: log identifiers and metadata needed for debugging, not raw content.
 - **Phase 1 Analysis vs. Phase 2 Simplification** — e.g., Phase 1 suggests adding a guard, but simplification says the code is already handling it. Resolution: note the tradeoff and let the user decide.
 - **Phase 2 Error Handling vs. Phase 2 Rules Check** — e.g., lodestar:error-handling-audit adds a try/catch, but rules check flags it as a convention violation. Resolution: propose a fix that satisfies both.
@@ -335,6 +354,7 @@ Depth: deep | Time: N min | Generated, not read: G
 | Code Simplification | — | — | — | — |
 | Project Rules Check | — | — | — | — |
 | Project Checks | — | — | — | — |
+| Security Audit | — | — | — | — |
 | **After dedup & conflicts** | **—** | **—** | **—** | **—** |
 | Outside the diff | — | — | — | — |
 
@@ -372,7 +392,7 @@ Number issues sequentially across all severity groups (1, 2, 3…). The orchestr
 |---|---|---|---|---|---|
 | 3 | `Pages/Chat.tsx`:120 | Inline style could use cn() | 85 | Reuse | Extract to utility |
 
-Source tags: `P1-Quality`, `P1-Behavior`, `P1-Logic`, `P1-Security`, `P1-UI`, `P1-Testing`, `P1-Spec`, `ErrAudit`, `Reuse`, `Simplify-Quality`, `Efficiency`, `Rules`, `Checks`, `Generated`.
+Source tags: `P1-Quality`, `P1-Behavior`, `P1-Logic`, `P1-Security`, `P1-UI`, `P1-Testing`, `P1-Spec`, `ErrAudit`, `Reuse`, `Simplify-Quality`, `Efficiency`, `Rules`, `Checks`, `SecAudit`, `Generated`.
 
 When two or more fixes are reasonable and the choice is the user's, give 2–4 options in the Fix column (`A: …; B: …`), the one you recommend first, and list the issue under **Decisions needed**.
 

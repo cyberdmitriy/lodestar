@@ -8,7 +8,7 @@ argument-hint: "[file-or-path]"
 
 Evaluate whether a plan, solution, or implementation is **robust, reliable, and architecturally sound** — or whether it is a workaround, quickfix, or suboptimal choice that leaves root causes unresolved.
 
-This skill does NOT check convention compliance (that is `/lodestar:check-rules`). This skill checks whether the **right approach was chosen**.
+This skill does NOT check convention compliance (that is `/lodestar:check-rules`) or hunt for security vulnerabilities (that is `/lodestar:security-audit`). This skill checks whether the **right approach was chosen**.
 
 ## Run the audit from outside the work
 
