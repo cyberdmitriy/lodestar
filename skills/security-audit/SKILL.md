@@ -1,8 +1,8 @@
 ---
 name: security-audit
 description: "Use when the user asks for a security audit, to check code for vulnerabilities, or to find exploitable holes before a commit or merge request: injection, broken access control, XSS, CSRF, exposed secrets, unsafe deserialization, SSRF, insecure uploads, Electron isolation gaps. Audits uncommitted work by default, or a branch against its base, or a path. Has checklists for Laravel, Drupal and Node/React/Electron. Triggers on '/lodestar:security-audit'."
-argument-hint: "[uncommitted | branch | <base-ref> | <path>…] [--report-only]"
-allowed-tools: Bash(git diff *), Bash(git ls-files *), Bash(git rev-parse *), Bash(git merge-base *), Bash(git rev-list *), Bash(git symbolic-ref *), Bash(git check-attr *), Bash(git grep *), Bash(date *), Bash(mktemp *)
+argument-hint: "[uncommitted | branch | <base-ref> | <path>…] [--repo <path>] [--report-only]"
+allowed-tools: Bash(git diff *), Bash(git ls-files *), Bash(git rev-parse *), Bash(git merge-base *), Bash(git rev-list *), Bash(git symbolic-ref *), Bash(git for-each-ref *), Bash(git check-attr *), Bash(git grep *), Bash(date *), Bash(mktemp *)
 ---
 
 # Security Audit
@@ -25,11 +25,12 @@ Record the start time with `date +%s`.
 
 ## Step 1 — Resolve the scope
 
-**Repository:** `git rev-parse --show-toplevel` gives `<repository>`, the absolute path of the working tree you are in (a linked worktree has its own). When `<repository>` is the current directory, run your own git commands as plain `git …`, which the `allowed-tools` patterns cover; otherwise as `git -C <repository> …`, which may ask for permission. The diff commands in the subagent prompts always use `git -C <repository>`. Keep every file path relative to `<repository>`. Outside a git repository only path mode works, and `<repository>` is the current directory.
+**Repository:** `git rev-parse --show-toplevel` gives `<repository>`, the absolute path of the working tree you are in (a linked worktree has its own); with `--repo <path>`, run it in that path instead. When `<repository>` is the current directory, run your own git commands as plain `git …`, which the `allowed-tools` patterns cover; otherwise as `git -C <repository> …`, which may ask for permission. The diff commands in the subagent prompts always use `git -C <repository>`. Keep every file path relative to `<repository>`. Outside a git repository only path mode works, and `<repository>` is the current directory.
 
 Parse the arguments:
 
 - `--report-only` → no fix step: skip Step 6, and your final message is the report and nothing after it.
+- `--repo <path>` → the repository to audit, when it is not the current directory (see **Repository** above).
 - no scope argument, or `uncommitted` → **uncommitted** mode.
 - `branch` → **branch** mode; the base is found under **Base** below.
 - a git ref that resolves (`git rev-parse --verify --quiet <ref>`), e.g. `origin/develop`, with any `..HEAD` / `...HEAD` suffix stripped → **branch** mode with that ref as the base, used as given: skip **Base** and the base check.
@@ -38,7 +39,7 @@ Parse the arguments:
 
 **Base:**
 
-1. Candidates: the ref that `git symbolic-ref --short refs/remotes/origin/HEAD` points to, and each of `origin/develop`, `origin/main`, `origin/master`, `origin/production`, `origin/staging` that exists (`git rev-parse --verify --quiet <ref>`), each ref once. With no `origin` remote: the local `develop`, `main`, `master` that exist.
+1. Candidates: the ref that `git symbolic-ref --short refs/remotes/origin/HEAD` points to; each of `origin/develop`, `origin/main`, `origin/master`, `origin/production`, `origin/staging` that exists (`git rev-parse --verify --quiet <ref>`); and the **parent branch**, for a branch stacked on another feature branch: of the remote branches HEAD already contains (`git for-each-ref --merged HEAD --sort=-committerdate --count=10 --format='%(refname:short)' refs/remotes/origin`), leave out `origin/HEAD`, HEAD's own upstream when it has one (`git rev-parse --abbrev-ref @{upstream}`) and any branch with the current branch's name, and take the one with the fewest commits ahead. Each ref once. With no `origin` remote: the local `develop`, `main`, `master` that exist.
 2. For each candidate: `git merge-base <candidate> HEAD` gives its merge-base, and `git rev-list --count <merge-base>..HEAD` its commits ahead.
 3. The base is the candidate with the fewest commits ahead.
 
@@ -59,7 +60,7 @@ Finders may still read tests and docs for context.
 
 **Base check**, only for a base found under **Base**: the base looks wrong when it is more than 50 commits ahead, or when more than 100 files are left after dropping. Then:
 
-- without `--report-only`: ask with AskUserQuestion, header `Base`, one option per candidate (up to 4), the nearest first, each described by its commits ahead. End the question text with: *"Or type a ref in Other."* A branch stacked on another feature branch needs that: its base is the parent branch, which is never a candidate. Treat the answer as a `<base-ref>` argument and rebuild the file list.
+- without `--report-only`: ask with AskUserQuestion, header `Base`, one option per candidate (up to 4), the nearest first, each described by its commits ahead. End the question text with: *"Or type a ref in Other."* A parent branch that was never pushed is not among the candidates, so it has to be typed. Treat the answer as a `<base-ref>` argument and rebuild the file list.
 - with `--report-only`: return `Base looks wrong: <base> is <n> commits ahead, <N> files in scope. Pass the base ref explicitly.` and stop.
 
 **Nothing left after dropping**, in any mode:
@@ -151,33 +152,35 @@ Keep a candidate when its verdict is `real` and its confidence is 80 or more. A 
 
 Record the end time.
 
-**Report language.** An explicit request wins: a language named in the arguments or in the invoking message. Otherwise use the language the user writes in, in this conversation. Ignore the language of code, files and tool output. With no user messages to go by (for example inside a subagent), use English. Severity labels, categories, code, paths and quotes stay as they are.
+**Report language.** An explicit request wins: a language named in the arguments or in the invoking message. Otherwise use the language the user writes in, in this conversation. Ignore the language of code, files and tool output. With no user messages to go by (for example inside a subagent), use English. Headings, bold labels, severity names, categories, code, paths and quotes stay as they are.
 
-```
-Security Audit
-==============
-Scope: <mode>[ vs <base>] | Files: N | Stacks: <list> | Time: N min
-Agents: F finders, V verifiers | Candidates: C → confirmed: K
-```
+**Format.** Plain markdown, which the chat renders: headings, short bullet lines, bold labels, `code` for paths. Never put the report or any part of it inside a code block (``` fences): a code block shows raw monospace text with no formatting. No tables. The first two lines tell the outcome; details and run metadata go last. The examples are quoted with `>` only to set them apart in this file; write the report without `>`.
 
-Then each confirmed finding, Critical first, numbered:
+**1. Verdict.**
 
-```
-### 1. Critical · sql_injection · app/Http/Controllers/OrderController.php:42
-- Issue: <what is wrong, one or two sentences>
-- Attack: <who can do it (unauthenticated visitor / any logged-in user / role), what they send, what they get>
-- Fix: <the root fix, in the project's own mechanism>
-- Confidence: 92 · Checked: <reproduced in scratch / by reading code>
-```
+> ## Security audit: 2 vulnerabilities
+> **1 critical, 1 important** · fix first: #1 · 5 candidates checked, 3 filtered
 
-Then:
+With nothing confirmed: `## Security audit: no exploitable vulnerabilities found`, and on the second line how many candidates were checked and filtered, or `no candidates`.
 
-- **Pre-existing** (diff modes only): problems in code the diff does not touch, one line each, `path:line — category — what`. Say that these were not verified. Omit when empty.
-- **Filtered:** every rejected candidate, one line each, `path:line — category — verdict — the verifier's reason`. This list is how the user tunes the skill, so never drop it. Omit when there were no candidates.
-- **Not covered:** always list dependencies (name the audit command for the detected stacks) and server or runtime configuration, plus every **Not reviewed** line from the finders.
+**2. Findings**, Critical first, numbered:
+
+> #### 1 · Critical · sql_injection · `app/Http/Controllers/OrderController.php:42`
+> - **Issue:** what is wrong, one or two sentences
+> - **Attack:** who can do it (unauthenticated visitor / any logged-in user / role), what they send, what they get
+> - **Fix:** the root fix, in the project's own mechanism
+> - **Confidence:** 92 · **Checked:** reproduced in scratch / by reading code
+
+**3. Then these sections**, each a `###` heading with one short bullet per item, omitted when empty unless noted:
+
+- **Pre-existing** (diff modes only): problems in code the diff does not touch, `path:line — category — what`. Say that these were not verified.
+- **Filtered:** every rejected candidate, `path:line — category — verdict — the verifier's reason`. This list is how the user tunes the skill, so never drop it.
 - **Checked** (only when nothing was confirmed): every finder's **Checked** line, as it is. It shows what the empty result rests on.
+- **Not covered** (always): dependencies, with the audit command for the detected stacks, and server or runtime configuration, plus every **Not reviewed** line from the finders.
 
-No confirmed findings → say so in one line, `No exploitable vulnerabilities found in scope.`, then the sections above.
+**4. Run details**, the last line, in italics:
+
+> *Scope: uncommitted · 15 files · stacks: Laravel · 4 min · 1 finder, 5 verifiers*
 
 ## Step 6 — Fixes
 

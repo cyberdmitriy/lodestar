@@ -14,18 +14,20 @@ You are the review subagent started by `/lodestar:code-review`. You run in an is
 
 Your prompt gives you a scope block:
 
+- **Repository** — the absolute path of the repository under review. File paths are relative to it; run every git command in this file as `git -C <repository> …`, and run the project's linters from it
 - **Depth** — `deep`
 - **Mode** — uncommitted / branch vs `<base>` / full codebase / layer / path
 - **Base** — the base ref for branch mode (e.g. `origin/develop`); the diff is `git diff <base>...HEAD` plus `git diff HEAD` for uncommitted work, plus untracked files (`git ls-files --others --exclude-standard -- <files>`), read in full
 - **Files** — the resolved file list, generated files left out
 - **Generated** — files in scope that are generated (lock files, schema dumps, snapshots, build output). See **Generated files** below
 - **Layers** — detected layers, or the single layer in scope
+- **Report language** — the language of every sentence in your report; see **Language** under **Unified Report**
 
 Before starting, read every file in `.claude/rules/` (if the directory exists) — those are the project rules `/lodestar:check-rules` will enforce, and knowing them keeps Phase 1 from duplicating them.
 
 ## Output
 
-Your final message is the **Unified Report** from Phase 3, complete, with real data. Nothing after it. The orchestrator shows it to the user verbatim and uses its issue numbers for the fix step, so keep the numbering and the `File:Line` / `Fix` columns exact.
+Your final message is the **Unified Report** from Phase 3, complete, with real data. Nothing after it. The orchestrator shows it to the user verbatim and uses its issue numbers for the fix step, so keep the numbering, the issue headings, the `Fix:` lines and the **Recommended fixes** table exact.
 
 ---
 
@@ -210,7 +212,9 @@ For each UI issue found: name the frontend component, describe what the user wou
 
 ## Spec Alignment
 
-If a task spec, plan, or PRD exists for the current work (check CLAUDE.md for spec locations and the recent commits from `git log --oneline -20`; you cannot ask the user — if no spec is found, say in the report that spec alignment was skipped), read it and verify:
+If a task spec, plan, or PRD exists for the current work (check CLAUDE.md for spec locations and the recent commits from `git log --oneline -20`; you cannot ask the user — if no spec is found, say in the report that spec alignment was skipped), read it. When the spec lives in a git repository other than the one under review, read its current state, not the local copy: `git -C <spec repo> fetch --quiet`, then read the files from the remote branch (`git -C <spec repo> show origin/<branch>:<path>`). If the fetch fails, read the local copy and say in the report how old it is (`git -C <spec repo> log -1 --format=%cr`). Never pull, merge, check out or otherwise change that repository.
+
+Verify:
 
 - All requirements from the spec are implemented — nothing missing
 - No scope creep — nothing implemented that the spec didn't ask for
@@ -233,7 +237,7 @@ If a file is clean across all sections, confirm it briefly.
 
 ### Verdict
 
-Record a verdict for the Unified Report's Verdict section: Yes / No / With fixes, plus a 1-2 sentence technical reasoning.
+Record a verdict for the first line of the Unified Report: ready / with fixes / not ready, plus a 1-2 sentence technical reasoning.
 
 **Do not fix anything yet.** Proceed to Phase 2 to collect all findings first.
 
@@ -296,13 +300,13 @@ Run the project's linters and static analysis read-only (no `--fix`, no formatte
 
 Invoke `/lodestar:security-audit --report-only` with the arguments for the mode (see **Scoping the sibling skills** below). It runs its own finders and checks every candidate with a separate verifier, so its findings are already filtered for false positives. Take its severities as they are (Critical → Critical, Important → Important) and its confidence as the issue's confidence; source tag `SecAudit`. Its **Pre-existing** lines go to **Outside the diff**. Keep its **Filtered** list for Phase 3.
 
-It may return one line instead of a report: `No files in scope…`, `Base looks wrong…` or `Too large for one run…`. Then it found nothing because it did not run: put that line in the Security Audit row of the Summary table in place of the counts, and say in the Verdict reasoning that the security audit was skipped. Do not run it again with another scope.
+It may return one line instead of a report: `No files in scope…`, `Base looks wrong…` or `Too large for one run…`. Then it found nothing because it did not run: put that line on the Security audit line under **By phase** in place of the counts, and say in the Verdict reasoning that the security audit was skipped. Do not run it again with another scope.
 
 ## Scoping the sibling skills
 
-`/lodestar:security-audit` takes the scope itself: uncommitted → `--report-only uncommitted`; branch → `--report-only <base>`; path → `--report-only <path>`; full codebase → `--report-only .`; layer → `--report-only <layer dir>`.
+`/lodestar:security-audit` takes the scope itself: uncommitted → `--report-only uncommitted`; branch → `--report-only <base>`; path → `--report-only <path>`; full codebase → `--report-only .`; layer → `--report-only <layer dir>`. Add `--repo <repository>` to every call.
 
-The other two siblings take no base ref. `/lodestar:check-rules` accepts one or more file paths, one rule name, or `--all`; with no path it checks only `git diff --name-only HEAD` (uncommitted work), which misses committed branch changes. `/lodestar:error-handling-audit` accepts one `--path` and `--stack`. Call them per mode:
+The other two siblings take no base ref, and no repository: pass them absolute paths (`<repository>/<file>`, `<repository>/<dir>`). `/lodestar:check-rules` accepts one or more file paths, one rule name, or `--all`; with no path it checks only `git diff --name-only HEAD` (uncommitted work), which misses committed branch changes. `/lodestar:error-handling-audit` accepts one `--path` and `--stack`. Call them per mode:
 
 | Mode | `/lodestar:error-handling-audit` | `/lodestar:check-rules` |
 |---|---|---|
@@ -333,114 +337,124 @@ For each conflict found, present both sides and a recommended resolution.
 
 ## Unified Report
 
-Present a single consolidated report with the tables below. All tables use real data from Phase 1 and Phase 2 — never placeholder values.
+**Format.** Write the report as plain markdown, which the chat renders: headings, short bullet lines, bold labels, `code` for paths and identifiers. Never put the report or any part of it inside a code block (``` fences): a code block shows raw monospace text with no formatting. Use a code block only to quote code. No tables other than **Recommended fixes**, which has three narrow columns. One idea per line; a line that runs past two rendered lines is too long. Real data from Phase 1 and Phase 2 only, never placeholder values.
 
-### Header
+**Order.** The first two lines tell the outcome: the verdict, then the counts. The **Recommended fixes** table follows as the overview of every issue, then the issue details, most severe first, then decisions and conflicts. Pre-existing problems, file lists, phase counts and run metadata go last.
 
-```
-Code Review Complete
-========================
+**Language.** Write every sentence in the report language from your prompt. Keep in English the headings, the bold labels (`Issue:`, `Fix:`, `Confidence:`, `Source:`, `Resolution:`), the table's column headings, severity names, the `Do` values (`Fix now`, `Later`, `Skip`), source tags, code, paths and quotes: the orchestrator and the fix step find them by name.
 
-Scope: X files | Mode: [uncommitted / branch vs <base> / full codebase / layer / path] | Layers: [all / specific]
-Depth: deep | Time: N min | Generated, not read: G
-```
+The examples below are quoted with `>` only to set them apart in this file. Write the report itself without `>`.
 
-### Summary (phase-by-phase counts)
+### 1. Verdict
 
-| Phase | Critical | Important | Minor | Total |
-|---|---|---|---|---|
-| Deep Analysis | — | — | — | — |
-| Error Handling Audit | — | — | — | — |
-| Code Simplification | — | — | — | — |
-| Project Rules Check | — | — | — | — |
-| Project Checks | — | — | — | — |
-| Security Audit | — | — | — | — |
-| **After dedup & conflicts** | **—** | **—** | **—** | **—** |
-| Outside the diff | — | — | — | — |
+> ## Code review: with fixes
+> **6 issues:** 1 critical, 3 important, 2 minor · **Decide:** #2 · **Outside the diff:** 1
+>
+> The payment action trusts raw input; the rest are UI error states and small rule violations.
 
-The bold row counts Issues by Severity only; the last row counts the **Outside the diff** table.
+- First line: `## Code review: ready`, `## Code review: with fixes` or `## Code review: not ready`.
+- Second line: the counts by severity (leave out a zero), the numbers under **Decisions needed**, the **Outside the diff** count. Leave out an empty part. No issues: `**No issues found.**`
+- Then one or two sentences of reasoning.
 
-### File Heat Map (one row per file in scope)
+### 2. Recommended fixes
 
-| File | Crit | Imp | Min | Sources |
-|---|---|---|---|---|
-| `app/Actions/Chat/SendAction.php` | 1 | 2 | 0 | P1-Logic, Rules |
-| `resources/js/Pages/Chat.tsx` | 0 | 1 | 1 | P1-UI, Reuse |
-| `app/Services/ChatService.php` | 0 | 0 | 0 | ✓ Clean |
+> ### Recommended fixes
+> | # | Do | Reason |
+> |---|---|---|
+> | 1 | Fix now | Any logged-in user can read other customers' orders through the payment action; one bound parameter closes it |
+> | 2 | Fix now | A 409 on message edit leaves the chat spinner running until the page is reloaded; a small handler in the chat page |
+> | 3 | Skip | Inline style in the chat page instead of `cn()`; style only, nothing breaks |
+> | O1 | Later | Provider rate limits (429) are never retried, so syncs fail at peak hours; changing retries belongs in its own task |
 
-List every file in scope — clean files get a "✓ Clean" source tag, generated files without findings get "Generated". Sort by severity descending (most critical files first). Count only Issues by Severity, not **Outside the diff**.
+Every issue gets exactly one row, `O` issues included after the numbered ones, in issue order. **Reason** is one sentence of about 12 to 25 words, written so that someone who has not read the issue block understands it:
 
-### Issues by Severity
+- first the problem in plain words: what breaks or is wrong, and for whom or where (name the feature, endpoint, page or file, not a line number);
+- then, after a semicolon, why this action: how big the fix is, what it risks, who should own it.
 
-Number issues sequentially across all severity groups (1, 2, 3…). The orchestrator uses these numbers when the user picks which issues to fix.
+Not the issue title repeated, and not the fix itself.
 
-**Critical (must fix)**
-
-| # | File:Line | Issue | Confidence | Source | Fix |
-|---|---|---|---|---|---|
-| 1 | `app/Actions/...`:42 | SQL injection via raw input | 95 | P1-Security | Use parameterized query |
-
-**Important (should fix)**
-
-| # | File:Line | Issue | Confidence | Source | Fix |
-|---|---|---|---|---|---|
-| 2 | `Pages/Chat.tsx`:88 | Missing error state for 409 | 90 | P1-UI | A: show a conflict message and reload; B: retry the send once |
-
-**Minor (note for later)**
-
-| # | File:Line | Issue | Confidence | Source | Fix |
-|---|---|---|---|---|---|
-| 3 | `Pages/Chat.tsx`:120 | Inline style could use cn() | 85 | Reuse | Extract to utility |
-
-Source tags: `P1-Quality`, `P1-Behavior`, `P1-Logic`, `P1-Security`, `P1-UI`, `P1-Testing`, `P1-Spec`, `ErrAudit`, `Reuse`, `Simplify-Quality`, `Efficiency`, `Rules`, `Checks`, `SecAudit`, `Generated`.
-
-When two or more fixes are reasonable and the choice is the user's, give 2–4 options in the Fix column (`A: …; B: …`), the one you recommend first, and list the issue under **Decisions needed**.
-
-### Outside the diff (uncommitted and branch mode only)
-
-Issues in code the diff does not change go here, not in Issues by Severity: pre-existing problems that Phase 1 or Phase 2 found in files in scope or in their interaction targets. An issue the diff causes, makes worse or makes newly reachable is not outside the diff — it belongs in Issues by Severity.
-
-| # | Severity | File:Line | Issue | Confidence | Source | Fix |
-|---|---|---|---|---|---|---|
-| O1 | Minor | `app/Http/Controllers/...`:57 | Pre-existing: unhandled 429 from the provider | 85 | ErrAudit | Retry with backoff |
-
-Number them `O1`, `O2`… so they never mix with the issue numbers. Omit this section in full codebase, layer and path mode, and when it is empty.
-
-### Recommended fixes
-
-Every issue appears here exactly once, `O` numbers included:
-
-| # | Do | Reason |
-|---|---|---|
-| 1 | Fix now | Exploitable from the chat form; one-line fix |
-| 2 | Fix now | Users get a stuck spinner on every edit conflict |
-| 3 | Skip | Style only, no effect |
-| O1 | Later | Changes how the integration retries; belongs in its own task |
+`Do` values:
 
 - **Fix now** — a real effect on this change, and a fix that stays within it.
 - **Later** — real, but outside this change's purpose, or the fix changes behavior that a separate task should own (check the project's rules on out-of-task changes).
-- **Skip** — the cost outweighs the effect, or something else already covers it (a test, static analysis, a guard elsewhere). Name what covers it.
+- **Skip** — the cost outweighs the effect, or something else already covers it (a test, static analysis, a guard elsewhere). Name what covers it in the reason.
 
-### Decisions needed
+### 3. Issues
 
-Only issues whose Fix column offers options:
+Number the issues across all severities (1, 2, 3…): the orchestrator uses these numbers when the user picks what to fix. Critical and Important issues get one block each, Critical first; no group headings.
 
-| # | Question | Options |
-|---|---|---|
-| 2 | What the user sees on an edit conflict | A: a conflict message and reload (recommended); B: one silent retry |
-
-Omit this section when no issue offers options.
-
-### Verdict
-
-> **Ready to proceed?** Yes / No / With fixes
+> #### 1 · Critical · `app/Actions/Payment/ProcessAction.php:42`
+> - **Issue:** raw request input goes into the SQL string, so any logged-in user can read other customers' orders
+> - **Fix:** bind the value: `where('reference', $ref)`
+> - **Confidence:** 95 · **Source:** P1-Security, SecAudit
 >
-> **Reasoning:** [1-2 sentence technical assessment]
+> #### 2 · Important · `resources/js/Pages/Chat.tsx:88`
+> - **Issue:** a 409 from the edit endpoint leaves the spinner running forever
+> - **Fix:** A (recommended): show a conflict message and reload; B: retry the send once
+> - **Confidence:** 90 · **Source:** P1-UI
 
-### Conflicts (only if conflicts exist)
+`Issue:` is at most two sentences, `Fix:` one.
 
-| # | Location | Phase A says | Phase B says | Resolution |
-|---|---|---|---|---|
-| 1 | `AuthService.php`:55 | P1-Security: sensitive data exposure | ErrAudit: needs error logging | Log user ID + status code, not token |
+**Minor issues are one line each**, under a `**Minor**` line after the blocks, so a long report stays short:
 
-Omit this section entirely if there are no conflicts.
+> **Minor**
+> - **#7** `app/Services/OrderService.php:118` — the order total is computed twice per request · **Fix:** reuse the value from line 96 · 85 · Efficiency
+
+The line keeps the issue in one sentence and the fix in one phrase; options go on it the same way (`**Fix:** A (recommended): …; B: …`). Source tags: `P1-Quality`, `P1-Behavior`, `P1-Logic`, `P1-Security`, `P1-UI`, `P1-Testing`, `P1-Spec`, `ErrAudit`, `Reuse`, `Simplify-Quality`, `Efficiency`, `Rules`, `Checks`, `SecAudit`, `Generated`.
+
+When two or more fixes are reasonable and the choice is the user's, give 2–4 options on the `Fix:` line (`A (recommended): …; B: …`), the recommended one first, and list the issue under **Decisions needed**.
+
+### 4. Decisions needed
+
+Only issues whose `Fix:` line offers options, one line each. Omit the section when there are none.
+
+> ### Decisions needed
+> - **#2** What the user sees on an edit conflict: A (recommended) — a conflict message and reload; B — one silent retry
+
+### 5. Conflicts
+
+Only when Phase 3 found conflicts; one block each.
+
+> ### Conflicts
+> #### Conflict 1 · `app/Services/AuthService.php:55`
+> - **P1-Security:** sensitive data in the log line
+> - **ErrAudit:** the error needs logging
+> - **Resolution:** log the user ID and status code, not the token
+
+### 6. Outside the diff
+
+Uncommitted and branch mode only; omit it otherwise and when empty. Issues in code the diff does not change go here, not under **Issues**: pre-existing problems that Phase 1 or Phase 2 found in files in scope or in their interaction targets. An issue the diff causes, makes worse or makes newly reachable is not outside the diff: it belongs under **Issues**. Same blocks, numbered `O1`, `O2`… so they never mix with the issue numbers.
+
+> ### Outside the diff
+> #### O1 · Minor · `app/Http/Controllers/ProviderController.php:57`
+> - **Issue:** pre-existing: an unhandled 429 from the provider
+> - **Fix:** retry with backoff
+> - **Confidence:** 85 · **Source:** ErrAudit
+
+### 7. Files
+
+> ### Files
+> - `app/Actions/Payment/ProcessAction.php` — 1 critical, 1 important · P1-Security, SecAudit, Rules
+> - `resources/js/Pages/Chat.tsx` — 1 important, 1 minor · P1-UI, Reuse
+> - ✓ 21 other files clean · generated, not read: `graphql/supergraph.graphql`
+
+List the files with Critical or Important issues, the most critical first, at most 10, then `… and N more`. Then one line for the files with only minor issues (their count) and one for the clean files (their count), naming the generated files on it. Count only **Issues**, not **Outside the diff**.
+
+### 8. By phase
+
+> ### By phase
+> - Deep analysis: 1 critical, 2 important
+> - Error handling audit: 1 important, 2 minor
+> - Code simplification: 1 minor
+> - Project rules check: 1 important
+> - Project checks: none
+> - Security audit: 1 critical (also found by deep analysis)
+> - After dedup and conflicts: 1 critical, 3 important, 2 minor
+
+When the security audit returned one line instead of a report, put that line in place of its counts.
+
+### 9. Run details
+
+The last line, in italics:
+
+> *Deep review · branch vs `origin/develop` · 24 files · layers: Laravel, React · 12 min · generated, not read: 1*

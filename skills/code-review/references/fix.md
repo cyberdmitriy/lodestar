@@ -8,19 +8,25 @@ Your prompt gives you:
 
 - The full **Unified Report** from the review run
 - The **approved issue numbers** — fix those and only those
-- **User decisions** — per issue, the fix option the user picked or a note in their words. A decision overrides the report's Fix column for that issue. If you cannot follow one, leave that issue unfixed and say why. An issue whose Fix column offers options and has no decision gets the first option
-- The scope block (mode, base, files)
+- **User decisions** — per issue, the fix option the user picked or a note in their words. A decision overrides the issue's `Fix:` line. If you cannot follow one, leave that issue unfixed and say why. An issue whose `Fix:` line offers options and has no decision gets the recommended one, which comes first
+- **Report language** — write your result in it; keep issue numbers, code and paths as they are
+- The scope block (repository, mode, base, files). File paths are relative to the repository; run the project's checks from it, and git as `git -C <repository> …`
 
 ## Output
 
-Your final message: per approved issue — fixed / not fixed (with the reason and the evidence), the baseline check results, the final check results, and any regression you hit and reverted.
+Your final message, as plain markdown (no code blocks, no tables), in the report language:
+
+- First line: `## Fixes: <fixed> of <approved> fixed` and the state of the checks (`checks pass` / `checks fail: <which>` / `stopped on a regression`).
+- One line per approved issue: `**#3** fixed — <what changed, file:line>` or `**#5** not fixed — <reason and evidence>`.
+- A regression you hit and reverted, if any: which fix caused it, what failed, what is left undone.
+- Last: the baseline and the final check results, one line each.
 
 ---
 
 ## Steps
 
 1. **Establish baseline** — run available project checks (tests, linters, static analysis) BEFORE making any changes. Record pass/fail state. If some checks already fail, note them as pre-existing failures and exclude from regression detection.
-2. Fix the approved issues — only those, nothing else from the report.
+2. Fix the approved issues — only those, nothing else from the report. Change files only: never run a git command that changes any repository, this one or another (`pull`, `merge`, `rebase`, `checkout`, `commit`, `push`). When an issue's fix is text you cannot reach (a message draft in the chat, a merge request description, a ticket comment), do not edit a stand-in file: report it as not fixed, needs the user, with the exact text to change.
 3. **Verify after every fix batch** — re-run the same project checks after each logical group of fixes. Do not batch all fixes and check once at the end.
 4. **If new failures appear** (not in the baseline): stop immediately. Do not continue with remaining fixes. Revert the fix that caused the regression by editing your own change back; keep the original text of each hunk before you change it. Never use `git checkout`, `git restore`, `git reset`, `git stash` or `git clean`: the files may hold the user's uncommitted work. Then return: which fix caused it, what failed, what is left undone. You cannot ask the user — the orchestrator does.
 5. **If checks match baseline:** continue to the next batch.
@@ -36,4 +42,5 @@ Verification checklist (apply to every fix):
 1. **Read the actual code** — not just the agent's summary of it. Confirm the problem exists as described.
 2. **Trace all callers and creation sites** — a method may appear broken in isolation but be correct in context. Check how the code is actually used, not just how it's defined.
 3. **Check existing codebase patterns** — if the fix contradicts a pattern used successfully elsewhere in the codebase, the fix is likely wrong.
-4. **Preserve logging and observability** — when fixing security issues in logging, replace with safe alternatives — never remove log statements entirely (see the Security section in `references/review.md`).
+4. **A new or changed test must be able to fail** — break the code it guards for a moment (drop the condition, change the value), run the test, see it fail, and put the code back. Say in the result that you did. A test that cannot fail protects nothing.
+5. **Preserve logging and observability** — when fixing security issues in logging, replace with safe alternatives — never remove log statements entirely (see the Security section in `references/review.md`).
